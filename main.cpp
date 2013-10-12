@@ -609,16 +609,14 @@ void TreeNode::selectAction()
 		TreeNode* newNode = current->select();
 		assert(newNode);
 		visited.push_back(newNode);
-		double value = newNode->rollOut();
-		for(TreeNode* node: visited) {
-			if(node->_board.player() == newNode->_board.player())
-				node->updateStats(value);
-			else
-				node->updateStats(1.0 - value);
-		}
-	} else {
-		double value = current->rollOut();
-		current->updateStats(value);
+		current = newNode;
+	}
+	double value = current->rollOut();
+	for(TreeNode* node: visited) {
+		if(node->_board.player() == current->_board.player())
+			node->updateStats(value);
+		else
+			node->updateStats(1.0 - value);
 	}
 }
 
@@ -702,8 +700,6 @@ double TreeNode::rollOut() const
 				result += 0.0;
 			else
 				result += 1.0;
-			
-			/// @todo Raiko's Speed-up 2
 		}
 	}
 	return result / (fillOutRepeats * bambooRepeats);
@@ -801,7 +797,7 @@ void GameInputOutput::run()
 
 BoardPoint GameInputOutput::generateMove()
 {
-	for(uint i = 0; i < 5000; ++i)
+	for(uint i = 0; i < 7500; ++i)
 		_tree->selectAction();
 	cerr << "nodes: " << TreeNode::numNodes()  << " (" << _tree->visits() << " visits)" << " (";
 	cerr << (TreeNode::numNodes() * sizeof(TreeNode) / (1024*1024))  << " MB)" <<endl;
