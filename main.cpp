@@ -1,11 +1,13 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#include <fstream>
 #include <inttypes.h>
 #include <cassert>
 #include <cstdlib>
 #include <sstream>
 #include <cmath>
+#include <sys/stat.h>
 using namespace std;
 typedef unsigned int uint;
 typedef unsigned char uint8;
@@ -27,7 +29,11 @@ inline double randomReal()
 	return static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
 }
 
+class BoardPoint;
 class BoardMask;
+class Board;
+class Move;
+class TreeNode;
 
 class BoardPoint {
 public:
@@ -36,6 +42,7 @@ public:
 	BoardPoint(uint position): _position(position) { }
 	~BoardPoint() { }
 	
+	bool operator==(const BoardPoint& other) const { return _position == other._position; }
 	bool isValid() const { return _position >= 1 && _position <= 106; }
 	uint position() const { return _position; }
 	BoardMask mask() const;
@@ -44,7 +51,7 @@ public:
 	
 protected:
 	static const BoardMask _neighbors[106];
-	uint _position;
+	uint _position; /// [1...106] inclusive
 };
 
 std::ostream& operator<<(std::ostream& out, const BoardPoint& point)
@@ -66,6 +73,50 @@ BoardPoint::BoardPoint(const string& str)
 {
 	stringstream stream(str);
 	stream >> *this;
+}
+
+
+class Move: public BoardPoint {
+public:
+	static Move Swap;
+	
+	Move(): BoardPoint(0) { }
+	Move(const BoardPoint& point): BoardPoint(point) { }
+	Move(const string& str);
+	Move(uint position): BoardPoint(position) { }
+	~Move() { }
+	
+	bool isValid() const { return BoardPoint::isValid() || (*this == Swap); }
+	
+protected:
+	static const BoardMask _neighbors[106];
+	uint _position;
+};
+
+Move Move::Swap(107);
+
+Move::Move(const string& str)
+: BoardPoint(0)
+{
+	stringstream stream(str);
+	stream >> *this;
+}
+
+std::ostream& operator<<(std::ostream& out, const Move& move)
+{
+	if(move == Move::Swap)
+		out << "-1";
+	else
+		out << move.position();
+	return out;
+}
+
+std::istream& operator>>(std::istream& in, Move& move)
+{
+	int position;
+	in >> position;
+	move = (position == -1) ? Move::Swap : Move(position);
+	return in;
 }
 
 class BoardMask {
@@ -371,7 +422,7 @@ public:
 	
 	BoardMask moves() const { return ~(_white | _black); }
 	bool gameOver() const;
-	void playMove(BoardPoint move);
+	void playMove(Move move);
 	void playSwapMove();
 	
 	BoardMask white() const { return _white; }
@@ -406,7 +457,7 @@ std::ostream& operator<<(std::ostream& out, const Board& board)
 	return out;
 }
 
-void Board::playMove(BoardPoint move)
+void Board::playMove(Move move)
 {
 	if(_whiteToPlay)
 		_white.set(move);
@@ -533,8 +584,11 @@ public:
 	static constexpr double explorationParameter = sqrt(2.0);
 	static uint numNodes() { return _numNodes; }
 	
+	TreeNode(): TreeNode(Board()) {}
 	TreeNode(const Board& board);
 	~TreeNode();
+	
+	void loadGames(const string& file);
 	
 	void selectAction();
 	void expand();
@@ -543,12 +597,15 @@ public:
 	void updateStats(double value);
 	uint arity() { return _children.size(); }
 	
-	TreeNode* extractChild(BoardPoint move);
+	TreeNode* child(Move move);
+	
+	// Favorite child, forget all other children
+	void vincent(TreeNode* child);
 	
 	double visits() const { return _visits; }
 	double totalValue() const { return _totalValue; }
 	
-	BoardPoint bestMove() const;
+	Move bestMove() const;
 	
 protected:
 	static uint _numNodes;
@@ -577,22 +634,52 @@ TreeNode::~TreeNode()
 	_numNodes--;
 }
 
-// Also deletes other children
-TreeNode* TreeNode::extractChild(BoardPoint move)
+void TreeNode::loadGames(const string& filename)
 {
+	ifstream file(filename);
+	if(!file.good()) {
+		cerr << "Could not read: " << filename << endl;
+		return;
+	}
+	for(string line; getline(file, line); ) {
+		cerr << "Tree: " << TreeNode::numNodes() << endl;
+		cerr << "Game: ";
+		stringstream ss(line);
+		
+		TreeNode* gameState = this;
+		while(ss.good()) {
+			Move move;
+			ss >> move;
+			assert(move.isValid());
+			cerr << "[" << move << "]";
+			gameState = gameState->child(move);
+			assert(gameState);
+		}
+		assert(gameState->_board.gameOver());
+		cerr << endl;
+	}
+}
+
+TreeNode* TreeNode::child(Move move)
+{
+	expand(); /// @todo A full expand may be to much
 	Board resultingBoard(_board);
 	resultingBoard.playMove(move);
-	TreeNode* node = nullptr;
 	for(TreeNode* c: _children) {
 		if(c->_board == resultingBoard)
-			node = c;
-		else
-			delete c;
+			return c;
 	}
+	return nullptr;
+}
+
+void TreeNode::vincent(TreeNode* child)
+{
+	// Forget other children
+	for(TreeNode* c: _children)
+		if(c != child)
+			delete c;
 	_children.clear();
-	if(!node)
-		node = new TreeNode(resultingBoard);
-	return node;
+	_children.push_back(child);
 }
 
 void TreeNode::selectAction()
@@ -638,15 +725,18 @@ TreeNode* TreeNode::select() const
 	return selected;
 }
 
-BoardPoint TreeNode::bestMove() const
+Move TreeNode::bestMove() const
 {
 	// Find node with highest playout count
 	TreeNode* best = nullptr;
-	uint maxPlayouts = 0;
+	uint value = 0;
 	for(TreeNode* c: _children) {
-		if(c->_visits > maxPlayouts) {
+		double v = c->_totalValue / (c->_visits + epsilon);
+		assert(v >= 0.0);
+		assert(v <= 1.0);
+		if(v > value) {
 			best = c;
-			maxPlayouts = c->_visits;
+			value = v;
 		}
 	}
 	assert(best);
@@ -657,7 +747,8 @@ BoardPoint TreeNode::bestMove() const
 
 void TreeNode::expand()
 {
-	assert(_children.empty());
+	if(!_children.empty())
+		return;
 	if(_board.gameOver())
 		return;
 	BoardMask moves = _board.moves();
@@ -716,8 +807,8 @@ public:
 	GameInputOutput(): _board(), _tree(new TreeNode(_board)) { }
 	~GameInputOutput() { delete _tree; }
 	void run();
-	void playMove(BoardPoint move);
-	BoardPoint generateMove();
+	void playMove(Move move);
+	Move generateMove();
 	
 protected:
 	Board _board;
@@ -795,7 +886,7 @@ void GameInputOutput::run()
 	cerr << "Quiting" << line << endl;
 }
 
-BoardPoint GameInputOutput::generateMove()
+Move GameInputOutput::generateMove()
 {
 	for(uint i = 0; i < 7500; ++i)
 		_tree->selectAction();
@@ -804,11 +895,11 @@ BoardPoint GameInputOutput::generateMove()
 	return _tree->bestMove();
 }
 
-void GameInputOutput::playMove(BoardPoint move)
+void GameInputOutput::playMove(Move move)
 {
 	_board.playMove(move);
-	TreeNode* newTree = _tree->extractChild(move);
-	delete _tree;
+	TreeNode* newTree = _tree->child(move);
+	_tree->vincent(newTree);
 	_tree = newTree;
 	cerr << "nodes: " << TreeNode::numNodes() << " (" << _tree->visits() << " visits)"  << endl;
 }
@@ -817,6 +908,12 @@ int main(int argc, char* argv[])
 {
 	cerr << "R " << argv[0]  << endl;
 	srand(time(0));
+	
+	TreeNode tn;
+	tn.loadGames("competitions-sym.txt");
+	
+	return 0;
+	
 	GameInputOutput gio;
 	gio.run();
 	cerr << "Exit" << endl;
