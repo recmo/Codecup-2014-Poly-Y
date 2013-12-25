@@ -37,20 +37,26 @@ class TreeNode;
 
 class BoardPoint {
 public:
+	static constexpr uint maxRotation = 10;
+	
 	BoardPoint(): _position(0) { }
 	BoardPoint(const string& str);
 	BoardPoint(uint position): _position(position) { }
 	~BoardPoint() { }
 	
+	bool operator!=(const BoardPoint& other) const { return _position != other._position; }
 	bool operator==(const BoardPoint& other) const { return _position == other._position; }
 	bool isValid() const { return _position >= 1 && _position <= 106; }
 	uint position() const { return _position; }
 	BoardMask mask() const;
+	BoardPoint& rotate(uint degrees) { *this = rotated(degrees); return *this; }
+	BoardPoint rotated(uint degrees) const { return _rotations[degrees][_position - 1]; }
 	BoardMask neighbors() const;
 	BoardPoint& position(uint value) { _position = value; return *this; }
 	
 protected:
 	static const BoardMask _neighbors[106];
+	static const uint8 _rotations[10][106];
 	uint _position; /// [1...106] inclusive
 };
 
@@ -75,6 +81,19 @@ BoardPoint::BoardPoint(const string& str)
 	stream >> *this;
 }
 
+const uint8 BoardPoint::_rotations[10][106] = {
+	{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106},
+	{49,61,48,36,72,60,47,35,25,82,71,59,46,34,24,16,91,81,70,58,45,33,23,15,9,99,90,80,69,57,44,32,22,14,8,4,106,98,89,79,68,56,43,31,21,13,7,3,1,105,97,88,78,67,55,42,30,20,12,6,2,104,96,87,77,66,54,41,29,19,11,5,103,95,86,76,65,53,40,28,18,10,102,94,85,75,64,52,39,27,17,101,93,84,74,63,51,38,26,100,92,83,73,62,50,37},
+	{37,50,38,26,62,51,39,27,17,73,63,52,40,28,18,10,83,74,64,53,41,29,19,11,5,92,84,75,65,54,42,30,20,12,6,2,100,93,85,76,66,55,43,31,21,13,7,3,1,101,94,86,77,67,56,44,32,22,14,8,4,102,95,87,78,68,57,45,33,23,15,9,103,96,88,79,69,58,46,34,24,16,104,97,89,80,70,59,47,35,25,105,98,90,81,71,60,48,36,106,99,91,82,72,61,49},
+	{106,105,98,99,104,97,89,90,91,103,96,88,79,80,81,82,102,95,87,78,68,69,70,71,72,101,94,86,77,67,56,57,58,59,60,61,100,93,85,76,66,55,43,44,45,46,47,48,49,92,84,75,65,54,42,31,32,33,34,35,36,83,74,64,53,41,30,21,22,23,24,25,73,63,52,40,29,20,13,14,15,16,62,51,39,28,19,12,7,8,9,50,38,27,18,11,6,3,4,37,26,17,10,5,2,1},
+	{100,101,93,92,102,94,85,84,83,103,95,86,76,75,74,73,104,96,87,77,66,65,64,63,62,105,97,88,78,67,55,54,53,52,51,50,106,98,89,79,68,56,43,42,41,40,39,38,37,99,90,80,69,57,44,31,30,29,28,27,26,91,81,70,58,45,32,21,20,19,18,17,82,71,59,46,33,22,13,12,11,10,72,60,47,34,23,14,7,6,5,61,48,35,24,15,8,3,2,49,36,25,16,9,4,1},
+	{100,92,93,101,83,84,85,94,102,73,74,75,76,86,95,103,62,63,64,65,66,77,87,96,104,50,51,52,53,54,55,67,78,88,97,105,37,38,39,40,41,42,43,56,68,79,89,98,106,26,27,28,29,30,31,44,57,69,80,90,99,17,18,19,20,21,32,45,58,70,81,91,10,11,12,13,22,33,46,59,71,82,5,6,7,14,23,34,47,60,72,2,3,8,15,24,35,48,61,1,4,9,16,25,36,49},
+	{106,99,98,105,91,90,89,97,104,82,81,80,79,88,96,103,72,71,70,69,68,78,87,95,102,61,60,59,58,57,56,67,77,86,94,101,49,48,47,46,45,44,43,55,66,76,85,93,100,36,35,34,33,32,31,42,54,65,75,84,92,25,24,23,22,21,30,41,53,64,74,83,16,15,14,13,20,29,40,52,63,73,9,8,7,12,19,28,39,51,62,4,3,6,11,18,27,38,50,1,2,5,10,17,26,37},
+	{37,26,38,50,17,27,39,51,62,10,18,28,40,52,63,73,5,11,19,29,41,53,64,74,83,2,6,12,20,30,42,54,65,75,84,92,1,3,7,13,21,31,43,55,66,76,85,93,100,4,8,14,22,32,44,56,67,77,86,94,101,9,15,23,33,45,57,68,78,87,95,102,16,24,34,46,58,69,79,88,96,103,25,35,47,59,70,80,89,97,104,36,48,60,71,81,90,98,105,49,61,72,82,91,99,106},
+	{49,36,48,61,25,35,47,60,72,16,24,34,46,59,71,82,9,15,23,33,45,58,70,81,91,4,8,14,22,32,44,57,69,80,90,99,1,3,7,13,21,31,43,56,68,79,89,98,106,2,6,12,20,30,42,55,67,78,88,97,105,5,11,19,29,41,54,66,77,87,96,104,10,18,28,40,53,65,76,86,95,103,17,27,39,52,64,75,85,94,102,26,38,51,63,74,84,93,101,37,50,62,73,83,92,100},
+	{1,4,3,2,9,8,7,6,5,16,15,14,13,12,11,10,25,24,23,22,21,20,19,18,17,36,35,34,33,32,31,30,29,28,27,26,49,48,47,46,45,44,43,42,41,40,39,38,37,61,60,59,58,57,56,55,54,53,52,51,50,72,71,70,69,68,67,66,65,64,63,62,82,81,80,79,78,77,76,75,74,73,91,90,89,88,87,86,85,84,83,99,98,97,96,95,94,93,92,106,105,104,103,102,101,100}
+};
+
 
 class Move: public BoardPoint {
 public:
@@ -90,7 +109,6 @@ public:
 	
 protected:
 	static const BoardMask _neighbors[106];
-	uint _position;
 };
 
 Move Move::Swap(107);
@@ -416,28 +434,28 @@ BoardPoint BoardMask::randomPoint() const
 
 class Board {
 public:
-	Board(): _whiteToPlay(true), _white(), _black() { }
+	Board(): _moveCount(0), _white(), _black() { }
 	~Board() { }
-	bool operator==(const Board& other) const { return _white == other._white && _black == other._black; }
+	bool operator==(const Board& other) const { return _moveCount == other._moveCount && _white == other._white && _black == other._black; }
 	
-	BoardMask moves() const { return ~(_white | _black); }
+	BoardMask nonSwapMoves() const { return ~(_white | _black); }
 	bool gameOver() const;
 	void playMove(Move move);
-	void playSwapMove();
 	
+	uint moveCount() const { return _moveCount; }
 	BoardMask white() const { return _white; }
 	BoardMask black() const { return _black; }
 	
-	int player() const { return _whiteToPlay ? 1 : 2; }
-	int winner() const;
+	uint player() const { return (_moveCount & 1) ? 2 : 1; }
+	uint winner() const;
 	
 	void bambooBridges();
 	void randomFillUp();
 	
 protected:
-	bool _whiteToPlay;
 	BoardMask _white;
 	BoardMask _black;
+	uint8 _moveCount;
 };
 
 std::ostream& operator<<(std::ostream& out, const Board& board)
@@ -459,21 +477,26 @@ std::ostream& operator<<(std::ostream& out, const Board& board)
 
 void Board::playMove(Move move)
 {
-	if(_whiteToPlay)
-		_white.set(move);
-	else
+	// Increase move counter
+	++_moveCount;
+	
+	// Swap move
+	if(move == Move::Swap) {
+		assert(_moveCount == 2);
+		swap(_black, _white);
+		return;
+	}
+	
+	// Placement move
+	if(_moveCount & 1)
 		_black.set(move);
-	_whiteToPlay = !_whiteToPlay;
-}
-
-void Board::playSwapMove()
-{
-	assert(!_whiteToPlay);
+	else
+		_white.set(move);
 }
 
 bool Board::gameOver() const
 {
-	if(!moves())
+	if(!nonSwapMoves())
 		return true;
 	if(_white.controlledCorners() >= 3)
 		return true;
@@ -482,7 +505,7 @@ bool Board::gameOver() const
 	return false;
 }
 
-int Board::winner() const
+uint Board::winner() const
 {
 	if(_white.controlledCorners() >= 3)
 		return 1;
@@ -592,7 +615,7 @@ public:
 	
 	void selectAction();
 	void expand();
-	bool isLeaf() { return _children.empty(); }
+	bool isLeaf() { return !_expanded; }
 	double rollOut() const;
 	void updateStats(double value);
 	uint arity() { return _children.size(); }
@@ -610,8 +633,9 @@ public:
 protected:
 	static uint _numNodes;
 	Board _board;
-	double _visits;
-	double _totalValue;
+	float _visits;
+	float _totalValue;
+	bool _expanded;
 	vector<TreeNode*> _children;
 	TreeNode* select() const;
 };
@@ -622,6 +646,7 @@ TreeNode::TreeNode(const Board& board)
 : _board(board)
 , _visits(0.0)
 , _totalValue(0.0)
+, _expanded(false)
 , _children()
 {
 	_numNodes++;
@@ -643,33 +668,44 @@ void TreeNode::loadGames(const string& filename)
 	}
 	for(string line; getline(file, line); ) {
 		cerr << "Tree: " << TreeNode::numNodes() << endl;
-		cerr << "Game: ";
-		stringstream ss(line);
 		
-		TreeNode* gameState = this;
-		while(ss.good()) {
-			Move move;
-			ss >> move;
-			assert(move.isValid());
-			cerr << "[" << move << "]";
-			gameState = gameState->child(move);
-			assert(gameState);
+		// Iterate over all symmetries
+		for(uint rotation = 0; rotation < BoardPoint::maxRotation; ++rotation) {
+			stringstream ss(line);
+			TreeNode* gameState = this;
+			while(ss.good()) {
+				Move move;
+				ss >> move;
+				assert(move.isValid());
+				if(move != Move::Swap)
+					move.rotate(rotation);
+				gameState = gameState->child(move);
+				assert(gameState);
+			}
+			if(!gameState->_board.gameOver()) {
+				cerr << "!!! Not entire game!" << endl;
+			}
+			/// @todo Commit score
 		}
-		assert(gameState->_board.gameOver());
-		cerr << endl;
 	}
 }
 
 TreeNode* TreeNode::child(Move move)
 {
-	expand(); /// @todo A full expand may be to much
+	// Create the resulting board
 	Board resultingBoard(_board);
 	resultingBoard.playMove(move);
+	
+	// See if there already is an childnode for it
 	for(TreeNode* c: _children) {
 		if(c->_board == resultingBoard)
 			return c;
 	}
-	return nullptr;
+	
+	// Construct a new child node
+	TreeNode* node = new TreeNode(resultingBoard);
+	_children.push_back(node);
+	return node;
 }
 
 void TreeNode::vincent(TreeNode* child)
@@ -740,23 +776,23 @@ Move TreeNode::bestMove() const
 		}
 	}
 	assert(best);
-	BoardMask moveMask = _board.moves() - best->_board.moves();
+	BoardMask moveMask = _board.nonSwapMoves() - best->_board.nonSwapMoves();
 	assert(moveMask.popcount() == 1);
 	return moveMask.firstPoint();
 }
 
 void TreeNode::expand()
 {
-	if(!_children.empty())
+	if(_expanded)
 		return;
+	_expanded = true;
 	if(_board.gameOver())
 		return;
-	BoardMask moves = _board.moves();
-	for(BoardMask::Itterator i(moves); i; ++i) {
-		Board next(_board);
-		next.playMove(*i);
-		_children.push_back(new TreeNode(next));
-	}
+	BoardMask moves = _board.nonSwapMoves();
+	for(BoardMask::Itterator i(moves); i; ++i)
+		child(*i);
+	if(_board.moveCount() == 1)
+		child(Move::Swap);
 }
 
 double TreeNode::rollOut() const
@@ -891,7 +927,7 @@ Move GameInputOutput::generateMove()
 	for(uint i = 0; i < 7500; ++i)
 		_tree->selectAction();
 	cerr << "nodes: " << TreeNode::numNodes()  << " (" << _tree->visits() << " visits)" << " (";
-	cerr << (TreeNode::numNodes() * sizeof(TreeNode) / (1024*1024))  << " MB)" <<endl;
+	cerr << (TreeNode::numNodes() * sizeof(TreeNode) / (1024*1024))  << " MB)" << endl;
 	return _tree->bestMove();
 }
 
@@ -909,8 +945,21 @@ int main(int argc, char* argv[])
 	cerr << "R " << argv[0]  << endl;
 	srand(time(0));
 	
-	TreeNode tn;
-	tn.loadGames("competitions-sym.txt");
+	TreeNode tree;
+	tree.loadGames("competitions-sym.txt");
+	
+	for(uint i = 0; i < 100000; ++i) {
+		if(i % 1000 == 0) {
+			cerr << "nodes: " << TreeNode::numNodes()  << " (" << tree.visits() << " visits)" << " (";
+			cerr << (TreeNode::numNodes() * sizeof(TreeNode) / (1024*1024))  << " MB)" << endl;
+		}
+		tree.selectAction();
+	}
+	cerr << "sizeof(BoardPoint) = " << sizeof(BoardPoint) << endl;
+	cerr << "sizeof(Move) = " << sizeof(Move) << endl;
+	cerr << "sizeof(BoardMask) = " << sizeof(BoardMask) << endl;
+	cerr << "sizeof(Board) = " << sizeof(Board) << endl;
+	cerr << "sizeof(TreeNode) = " << sizeof(TreeNode) << endl;
 	
 	return 0;
 	
