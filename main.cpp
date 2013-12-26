@@ -13,6 +13,8 @@ typedef unsigned char uint8;
 typedef uint64_t uint64;
 typedef signed int sint;
 
+bool debug = false;
+
 inline uint popcount(uint64 n)
 {
 	return __builtin_popcountll(n);
@@ -62,12 +64,6 @@ protected:
 	uint _position; /// [1...106] inclusive
 };
 
-std::ostream& operator<<(std::ostream& out, const BoardPoint& point)
-{
-	out << point.position();
-	return out;
-}
-
 const uint8 BoardPoint::_rotations[10][106] = {
 	{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106},
 	{49,61,48,36,72,60,47,35,25,82,71,59,46,34,24,16,91,81,70,58,45,33,23,15,9,99,90,80,69,57,44,32,22,14,8,4,106,98,89,79,68,56,43,31,21,13,7,3,1,105,97,88,78,67,55,42,30,20,12,6,2,104,96,87,77,66,54,41,29,19,11,5,103,95,86,76,65,53,40,28,18,10,102,94,85,75,64,52,39,27,17,101,93,84,74,63,51,38,26,100,92,83,73,62,50,37},
@@ -116,9 +112,7 @@ std::istream& operator>>(std::istream& in, Move& move)
 {
 	int position;
 	in >> position;
-	cerr << "position = " << position << endl;
 	move = (position == -1) ? Move::Swap : Move(position);
-	cerr << "move = " << move << endl;
 	assert(move.isValid());
 	return in;
 }
@@ -604,6 +598,8 @@ public:
 	TreeNode(TreeNode* parent, Move move);
 	~TreeNode();
 	
+	Move move() const { return _move; }
+	
 	TreeNode* child(Move move);
 	
 	// Favorite child, forget all other children
@@ -757,7 +753,7 @@ void TreeNode::write(ostream& out, uint treshold) const
 			++numTresholdChildren;
 	
 	// Write out this node
-	out.put(_move.position());
+	out.put(_move.index());
 	out.write(reinterpret_cast<const char*>(&_visits), sizeof(_visits));
 	out.write(reinterpret_cast<const char*>(&_totalValue), sizeof(_totalValue));
 	out.put(numTresholdChildren);
@@ -778,7 +774,7 @@ void TreeNode::read(const string& filename, uint rotation)
 	}
 	uint before = TreeNode::numNodes();
 	ifstream file(filename, ifstream::in | ifstream::binary);
-	assert(file.get() == 0); // Skip first node move
+	assert(file.get() == 0xff); // Skip first node move
 	read(file, rotation);
 	file.close();
 	cerr << "Read " << (TreeNode::numNodes() - before) << " nodes" << endl;
@@ -799,8 +795,10 @@ void TreeNode::read(istream& in, uint rotation)
 	// Read child nodes
 	uint numChildren = in.get();
 	for(uint i = 0; i < numChildren; ++i) {
-		Move move(in.get());
-		move.rotate(rotation);
+		Move move = Move::fromIndex(in.get());
+		assert(move.isValid());
+		if(move != Move::Swap)
+			move.rotate(rotation);
 		TreeNode* c = child(move);
 		c->read(in);
 	}
@@ -884,6 +882,7 @@ void TreeNode::loadGames(const string& filename)
 			
 			/// @todo Commit score
 			float value = (board.winner() == board.player()) ? 1.0 : 0.0;
+			// value = 1.0 - value;
 			for(uint i = 0; i < 10; ++i)
 				gameState->updateStatsUpwards(value);
 		}
@@ -1025,7 +1024,7 @@ void GameInputOutput::run()
 		}
 		
 		// Own move
-		BoardPoint move = generateMove();
+		Move move = generateMove();
 		playMove(move);
 		cerr << _board << endl;
 		cerr << "Out: " << move << endl;
@@ -1054,13 +1053,14 @@ Move GameInputOutput::generateMove()
 
 void GameInputOutput::playMove(Move move)
 {
-	cerr << "Playing " << move;
 	_board.playMove(move);
-	TreeNode* vincent = _tree->child(move);
+	TreeNode* vincent = _current->child(move);	
 	assert(vincent);
 	_current->vincent(vincent);
 	_current = vincent;
-	cerr << "nodes: " << TreeNode::numNodes() << " (" << _current->visits() << " visits)"  << endl;
+	cerr << "Playing " << move << " ";
+	cerr << TreeNode::numNodes()  << " nodes (" << _current->visits() << " visits)" << " (";
+	cerr << (TreeNode::numNodes() * sizeof(TreeNode) / (1024*1024))  << " MB)" << endl;
 }
 
 void convertGames(const string& games, const string& out)
@@ -1100,13 +1100,14 @@ int main(int argc, char* argv[])
 	cerr << "sizeof(TreeNode) = " << sizeof(TreeNode) << endl;
 	srand(time(0));
 	
+	//convertGames("competitions-sym.txt", "games.bin");
 	//convertGames("competitions-sym.txt", "itterated.bin");
 	//ponder("itterated.bin");
 	//return 0;
 	
 	GameInputOutput gio;
 	//gio.tree()->read("/home/remco/Persoonlijk/Projects/Codecup/2014 Poly-Y/games.bin");
-	//gio.tree()->read("/home/remco/Persoonlijk/Projects/Codecup/2014 Poly-Y/itterated.bin");
+	gio.tree()->read("/home/remco/Persoonlijk/Projects/Codecup/2014 Poly-Y/itterated.bin");
 	gio.run();
 	cerr << "Exit" << endl;
 	return 0;
