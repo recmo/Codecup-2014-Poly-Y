@@ -7,7 +7,6 @@
 #include <cstdlib>
 #include <sstream>
 #include <cmath>
-#include <sys/stat.h>
 using namespace std;
 typedef unsigned int uint;
 typedef unsigned char uint8;
@@ -24,9 +23,9 @@ inline uint trailingZeros(uint64 n)
 	return __builtin_ctzll(n);
 }
 
-inline double randomReal()
+inline float randomReal()
 {
-	return static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
+	return static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
 }
 
 class BoardPoint;
@@ -38,19 +37,22 @@ class TreeNode;
 class BoardPoint {
 public:
 	static constexpr uint maxRotation = 10;
+	static constexpr uint maxIndex = 105;
+	static constexpr uint numIndices = 106;
+	static BoardPoint fromIndex(uint index) { return BoardPoint(index + 1); }
 	
 	BoardPoint(): _position(0) { }
-	BoardPoint(const string& str);
 	BoardPoint(uint position): _position(position) { }
 	~BoardPoint() { }
 	
+	uint index() const { return _position - 1; }
 	bool operator!=(const BoardPoint& other) const { return _position != other._position; }
 	bool operator==(const BoardPoint& other) const { return _position == other._position; }
 	bool isValid() const { return _position >= 1 && _position <= 106; }
 	uint position() const { return _position; }
 	BoardMask mask() const;
 	BoardPoint& rotate(uint degrees) { *this = rotated(degrees); return *this; }
-	BoardPoint rotated(uint degrees) const { return _rotations[degrees][_position - 1]; }
+	BoardPoint rotated(uint degrees) const { return BoardPoint(_rotations[degrees][index()]); }
 	BoardMask neighbors() const;
 	BoardPoint& position(uint value) { _position = value; return *this; }
 	
@@ -64,21 +66,6 @@ std::ostream& operator<<(std::ostream& out, const BoardPoint& point)
 {
 	out << point.position();
 	return out;
-}
-
-std::istream& operator>>(std::istream& in, BoardPoint& point)
-{
-	uint position;
-	in >> position;
-	point = BoardPoint(position);
-	return in;
-}
-
-BoardPoint::BoardPoint(const string& str)
-: _position(0)
-{
-	stringstream stream(str);
-	stream >> *this;
 }
 
 const uint8 BoardPoint::_rotations[10][106] = {
@@ -97,11 +84,14 @@ const uint8 BoardPoint::_rotations[10][106] = {
 
 class Move: public BoardPoint {
 public:
+	static constexpr uint maxIndex = 106;
+	static constexpr uint numIndices = 107;
+	static Move fromIndex(uint index) { return Move(index + 1); }
 	static Move Swap;
 	
 	Move(): BoardPoint(0) { }
 	Move(const BoardPoint& point): BoardPoint(point) { }
-	Move(const string& str);
+	explicit Move(const string& str);
 	Move(uint position): BoardPoint(position) { }
 	~Move() { }
 	
@@ -112,13 +102,6 @@ protected:
 };
 
 Move Move::Swap(107);
-
-Move::Move(const string& str)
-: BoardPoint(0)
-{
-	stringstream stream(str);
-	stream >> *this;
-}
 
 std::ostream& operator<<(std::ostream& out, const Move& move)
 {
@@ -133,8 +116,18 @@ std::istream& operator>>(std::istream& in, Move& move)
 {
 	int position;
 	in >> position;
+	cerr << "position = " << position << endl;
 	move = (position == -1) ? Move::Swap : Move(position);
+	cerr << "move = " << move << endl;
+	assert(move.isValid());
 	return in;
+}
+
+Move::Move(const string& str)
+: BoardPoint(0)
+{
+	stringstream stream(str);
+	stream >> *this;
 }
 
 class BoardMask {
@@ -434,7 +427,7 @@ BoardPoint BoardMask::randomPoint() const
 
 class Board {
 public:
-	Board(): _moveCount(0), _white(), _black() { }
+	Board(): _white(), _black(), _moveCount(0) { }
 	~Board() { }
 	bool operator==(const Board& other) const { return _moveCount == other._moveCount && _white == other._white && _black == other._black; }
 	
@@ -603,60 +596,261 @@ void Board::randomFillUp()
 class TreeNode {
 public:
 	static constexpr int nActions = 5;
-	static constexpr double epsilon = 1e-6;
-	static constexpr double explorationParameter = sqrt(2.0);
+	static constexpr float epsilon = 1e-6;
+	static constexpr float explorationParameter = sqrt(2.0);
 	static uint numNodes() { return _numNodes; }
 	
-	TreeNode(): TreeNode(Board()) {}
-	TreeNode(const Board& board);
+	TreeNode(): TreeNode(nullptr, Move()) {}
+	TreeNode(TreeNode* parent, Move move);
 	~TreeNode();
-	
-	void loadGames(const string& file);
-	
-	void selectAction();
-	void expand();
-	bool isLeaf() { return !_expanded; }
-	double rollOut() const;
-	void updateStats(double value);
-	uint arity() { return _children.size(); }
 	
 	TreeNode* child(Move move);
 	
 	// Favorite child, forget all other children
 	void vincent(TreeNode* child);
 	
-	double visits() const { return _visits; }
-	double totalValue() const { return _totalValue; }
+	uint depth() const;
+	uint numVisitedChildren() const;
+	BoardMask visitedChildren() const;
+	
+	
+	void loadGames(const string& file);
+	void read(const string& filename, uint rotation = 0);
+	void read(istream& in, uint rotation = 0);
+	void write(const string& filename, uint treshold = 0) const;
+	void write(ostream& out, uint treshold = 0) const;
+	
+	void writeOut(ostream& out, uint depth) const;
+	
+	void scaleStatistics(uint factor);
+	void updateStatsUpwards(float value);
+	void updateStats(float value);
+	
+	void selectAction(Board board);
+	bool isLeaf() { return _visits == 0; }
+	float rollOut(const Board& board) const;
+	
+	float visits() const { return _visits; }
+	float totalValue() const { return _totalValue; }
 	
 	Move bestMove() const;
 	
 protected:
+	friend ostream& operator<<(ostream& out, const TreeNode& treeNode);
 	static uint _numNodes;
-	Board _board;
-	float _visits;
+	
+	Move _move;
+	uint _visits;
 	float _totalValue;
-	bool _expanded;
-	vector<TreeNode*> _children;
-	TreeNode* select() const;
+	TreeNode* _parent;
+	TreeNode* _child;
+	TreeNode* _sibling;
+	TreeNode* select(const Board& board);
 };
 
 uint TreeNode::_numNodes = 0;
 
-TreeNode::TreeNode(const Board& board)
-: _board(board)
-, _visits(0.0)
-, _totalValue(0.0)
-, _expanded(false)
-, _children()
+TreeNode::TreeNode(TreeNode* parent, Move move)
+: _move(move)
+, _visits(0)
+, _totalValue(0.0f)
+, _parent(parent)
+, _child(nullptr)
+, _sibling(nullptr)
 {
 	_numNodes++;
 }
 
 TreeNode::~TreeNode()
 {
-	for(TreeNode* node: _children)
-		delete node;
+	for(TreeNode* c = _child; c; c = c->_sibling)
+		delete c;
 	_numNodes--;
+}
+
+TreeNode* TreeNode::child(Move move)
+{
+	assert(move.isValid());
+	
+	// See if there already is an childnode for it
+	for(TreeNode* c = _child; c; c = c->_sibling)
+		if(c->_move == move)
+			return c;
+	
+	// Construct a new child node
+	TreeNode* node = new TreeNode(this, move);
+	node->_sibling = _child;
+	_child = node;
+	return node;
+}
+
+uint TreeNode::depth() const
+{
+	uint result = 0;
+	for(TreeNode* p = _parent; p; p = p->_parent)
+		++result;
+	return result;
+}
+
+uint TreeNode::numVisitedChildren() const
+{
+	uint result = 0;
+	for(TreeNode* c = _child; c; c = c->_sibling)
+		++result;
+	return result;
+}
+
+BoardMask TreeNode::visitedChildren() const
+{
+	BoardMask result;
+	for(TreeNode* c = _child; c; c = c->_sibling)
+		result.set(c->_move);
+	return result;
+}
+
+void TreeNode::vincent(TreeNode* child)
+{
+	// Forget other children
+	for(TreeNode* c = _child; c; c = c->_sibling)
+		if(c != child)
+			delete c;
+	_child = child;
+	_child->_sibling = nullptr;
+}
+
+std::ostream& operator<<(std::ostream& out, const TreeNode& treeNode)
+{
+	out << treeNode.visits() << " " << treeNode._totalValue << " " << treeNode.depth();
+	for(const TreeNode* p = &treeNode; p; p = p->_parent)
+		out << " " << p->_move;
+	return out;
+}
+
+void TreeNode::writeOut(ostream& out, uint treshold) const
+{
+	if(_visits < treshold)
+		return;
+	out << *this << endl;
+	for(TreeNode* c = _child; c; c = c->_sibling)
+		c->writeOut(out, treshold);
+}
+
+void TreeNode::write(const string& filename, uint treshold) const
+{
+	ofstream file(filename, ofstream::out | ofstream::trunc | ofstream::binary);
+	write(file, treshold);
+	file.close();
+}
+
+void TreeNode::write(ostream& out, uint treshold) const
+{
+	assert(out.good());
+	
+	// Skip if the number of visits is insufficient
+	if(_visits < treshold)
+		return;
+	
+	// Count number of children that pass the threshold
+	uint numTresholdChildren = 0;
+	for(TreeNode* c = _child; c; c = c->_sibling)
+		if(c->_visits >= treshold)
+			++numTresholdChildren;
+	
+	// Write out this node
+	out.put(_move.position());
+	out.write(reinterpret_cast<const char*>(&_visits), sizeof(_visits));
+	out.write(reinterpret_cast<const char*>(&_totalValue), sizeof(_totalValue));
+	out.put(numTresholdChildren);
+	
+	// Write out child nodes
+	for(TreeNode* c = _child; c; c = c->_sibling)
+		if(c->_visits >= treshold)
+			c->write(out, treshold);
+}
+
+void TreeNode::read(const string& filename, uint rotation)
+{
+	cerr << "Reading " << filename << endl;
+	if(rotation == -1) {
+		for(rotation = 0; rotation < Move::maxRotation; ++rotation)
+			read(filename, rotation);
+		return;
+	}
+	uint before = TreeNode::numNodes();
+	ifstream file(filename, ifstream::in | ifstream::binary);
+	assert(file.get() == 0); // Skip first node move
+	read(file, rotation);
+	file.close();
+	cerr << "Read " << (TreeNode::numNodes() - before) << " nodes" << endl;
+}
+
+void TreeNode::read(istream& in, uint rotation)
+{
+	assert(in.good());
+	
+	// Read this node
+	uint visits;
+	float value;
+	in.read(reinterpret_cast<char*>(&visits), sizeof(visits));
+	in.read(reinterpret_cast<char*>(&value), sizeof(value));
+	_visits += visits;
+	_totalValue += value;
+	
+	// Read child nodes
+	uint numChildren = in.get();
+	for(uint i = 0; i < numChildren; ++i) {
+		Move move(in.get());
+		move.rotate(rotation);
+		TreeNode* c = child(move);
+		c->read(in);
+	}
+}
+
+TreeNode* TreeNode::select(const Board& board)
+{
+	// Index over moves
+	uint visits[Move::numIndices];
+	float values[Move::numIndices];
+	bool valid[Move::numIndices];
+	for(uint i = 0; i < Move::numIndices; ++i) {
+		visits[i] = 0;
+		values[i] = 0.0f;
+		valid[i] = false;
+	}
+	
+	// Swap move
+	if(board.moveCount() == 1)
+		valid[Move::Swap.index()] = true;
+	
+	// Non swap moves
+	BoardMask moves = board.nonSwapMoves();
+	for(BoardMask::Itterator i = moves.itterator(); i; ++i)
+		valid[i->index()] = true;
+	
+	// Load existing child data
+	for(TreeNode* c = _child; c; c = c->_sibling) {
+		visits[c->_move.index()] = c->visits();
+		values[c->_move.index()] = c->totalValue();
+	}
+	
+	// Try existing children first
+	uint selectedIndex = 0;
+	float bestValue = 0.0;
+	const float logParentVisits = log(this->visits() + 1);
+	for(uint i = 0; i < Move::numIndices; ++i) {
+		if(!valid[i])
+			continue;
+		float uctValue =
+			values[i] / (visits[i] + epsilon) +
+			explorationParameter * sqrt(logParentVisits / (visits[i] + epsilon)) +
+			randomReal() * epsilon; // small random number to break ties randomly in unexpanded nodes
+		if(uctValue > bestValue) {
+			selectedIndex = i;
+			bestValue = uctValue;
+		}
+	}
+	Move selectedMove = Move::fromIndex(selectedIndex);
+	return child(selectedIndex + 1);
 }
 
 void TreeNode::loadGames(const string& filename)
@@ -667,11 +861,11 @@ void TreeNode::loadGames(const string& filename)
 		return;
 	}
 	for(string line; getline(file, line); ) {
-		cerr << "Tree: " << TreeNode::numNodes() << endl;
 		
 		// Iterate over all symmetries
 		for(uint rotation = 0; rotation < BoardPoint::maxRotation; ++rotation) {
 			stringstream ss(line);
+			Board board;
 			TreeNode* gameState = this;
 			while(ss.good()) {
 				Move move;
@@ -679,138 +873,67 @@ void TreeNode::loadGames(const string& filename)
 				assert(move.isValid());
 				if(move != Move::Swap)
 					move.rotate(rotation);
+				board.playMove(move);
 				gameState = gameState->child(move);
 				assert(gameState);
 			}
-			if(!gameState->_board.gameOver()) {
+			if(!board.gameOver()) {
 				cerr << "!!! Not entire game!" << endl;
+				continue;
 			}
+			
 			/// @todo Commit score
+			float value = (board.winner() == board.player()) ? 1.0 : 0.0;
+			for(uint i = 0; i < 10; ++i)
+				gameState->updateStatsUpwards(value);
 		}
 	}
 }
 
-TreeNode* TreeNode::child(Move move)
+void TreeNode::selectAction(Board board)
 {
-	// Create the resulting board
-	Board resultingBoard(_board);
-	resultingBoard.playMove(move);
-	
-	// See if there already is an childnode for it
-	for(TreeNode* c: _children) {
-		if(c->_board == resultingBoard)
-			return c;
-	}
-	
-	// Construct a new child node
-	TreeNode* node = new TreeNode(resultingBoard);
-	_children.push_back(node);
-	return node;
-}
-
-void TreeNode::vincent(TreeNode* child)
-{
-	// Forget other children
-	for(TreeNode* c: _children)
-		if(c != child)
-			delete c;
-	_children.clear();
-	_children.push_back(child);
-}
-
-void TreeNode::selectAction()
-{
-	vector<TreeNode*> visited;
 	TreeNode* current = this;
-	visited.push_back(current);
 	while(!current->isLeaf()) {
-		current = current->select();
-		visited.push_back(current);
+		current = current->select(board);
+		board.playMove(current->_move);
 	}
-	current->expand();
 	if(!current->isLeaf()) {
-		TreeNode* newNode = current->select();
+		TreeNode* newNode = current->select(board);
 		assert(newNode);
-		visited.push_back(newNode);
 		current = newNode;
+		board.playMove(current->_move);
 	}
-	double value = current->rollOut();
-	for(TreeNode* node: visited) {
-		if(node->_board.player() == current->_board.player())
-			node->updateStats(value);
-		else
-			node->updateStats(1.0 - value);
-	}
-}
-
-TreeNode* TreeNode::select() const
-{
-	TreeNode* selected = nullptr;
-	double bestValue = 0.0;
-	const double logParentVisits = log(visits() + 1);
-	for(TreeNode* c: _children) {
-		double uctValue =
-			c->totalValue() / (c->visits() + epsilon) +
-			explorationParameter * sqrt(logParentVisits / (c->visits() + epsilon)) +
-			randomReal() * epsilon; // small random number to break ties randomly in unexpanded nodes
-		if(uctValue > bestValue) {
-			selected = c;
-			bestValue = uctValue;
-		}
-	}
-	return selected;
+	float value = current->rollOut(board);
+	current->updateStatsUpwards(value);
 }
 
 Move TreeNode::bestMove() const
 {
 	// Find node with highest playout count
 	TreeNode* best = nullptr;
-	uint value = 0;
-	for(TreeNode* c: _children) {
-		double v = c->_totalValue / (c->_visits + epsilon);
-		assert(v >= 0.0);
-		assert(v <= 1.0);
-		if(v > value) {
+	for(TreeNode* c = _child; c; c = c->_sibling)
+		if(!best || c->_visits > best->_visits)
 			best = c;
-			value = v;
-		}
-	}
 	assert(best);
-	BoardMask moveMask = _board.nonSwapMoves() - best->_board.nonSwapMoves();
-	assert(moveMask.popcount() == 1);
-	return moveMask.firstPoint();
+	return best->_move;
 }
 
-void TreeNode::expand()
-{
-	if(_expanded)
-		return;
-	_expanded = true;
-	if(_board.gameOver())
-		return;
-	BoardMask moves = _board.nonSwapMoves();
-	for(BoardMask::Itterator i(moves); i; ++i)
-		child(*i);
-	if(_board.moveCount() == 1)
-		child(Move::Swap);
-}
-
-double TreeNode::rollOut() const
+float TreeNode::rollOut(const Board& board) const
 {
 	const uint bambooRepeats = 3;
 	const uint fillOutRepeats = 4;
-	double result = 0.0;
+	float result = 0.0;
 	
 	// Do the bamboo bridges
 	for(uint b = 0; b < bambooRepeats; b++) {
 		// Create bamboo bridges
-		Board bamboo(_board);
+		Board bamboo(board);
 		bamboo.bambooBridges();
 		
 		// Early exit if already won
-		int winner = bamboo.winner();
+		uint winner = bamboo.winner();
 		if(winner != 0) {
-			result += ((winner == _board.player()) ? 0.0 : 1.0) * fillOutRepeats;
+			result += ((winner == board.player()) ? 1.0 : 0.0) * fillOutRepeats;
 			continue;
 		}
 		
@@ -820,90 +943,88 @@ double TreeNode::rollOut() const
 			fillOut.randomFillUp();
 			
 			// 0, ½ or 1 point
-			int winner = fillOut.winner();
+			uint winner = fillOut.winner();
 			if(winner == 0)
 				result += 0.5;
-			if(winner == _board.player())
-				result += 0.0;
-			else
+			if(winner == board.player())
 				result += 1.0;
+			else
+				result += 0.0;
 		}
 	}
 	return result / (fillOutRepeats * bambooRepeats);
 }
 
-void TreeNode::updateStats(double value)
+void TreeNode::scaleStatistics(uint factor)
+{
+	_visits /= factor;
+	_totalValue /= factor;
+	for(TreeNode* c = _child; c; c = c->_sibling)
+		c->scaleStatistics(factor);
+}
+
+void TreeNode::updateStats(float value)
 {
 	++_visits;
 	_totalValue += value;
 }
 
+void TreeNode::updateStatsUpwards(float value)
+{
+	updateStats(value);
+	if(_parent)
+		_parent->updateStatsUpwards(1.0 - value);
+}
+
 class GameInputOutput {
 public:
-	GameInputOutput(): _board(), _tree(new TreeNode(_board)) { }
-	~GameInputOutput() { delete _tree; }
+	GameInputOutput();
+	~GameInputOutput();
 	void run();
 	void playMove(Move move);
 	Move generateMove();
 	
+	TreeNode* tree() { return _tree; }
+	
 protected:
 	Board _board;
 	TreeNode* _tree;
+	TreeNode* _current;
 };
+
+GameInputOutput::GameInputOutput()
+: _board()
+, _tree(new TreeNode())
+, _current(_tree)
+{
+}
+
+GameInputOutput::~GameInputOutput()
+{
+	delete _tree;
+}
 
 void GameInputOutput::run()
 {
-	/// @todo Opening book
-	
-	// First move
-	bool isWhite = false;
+	cerr << "Game loop" << endl;
 	string line;
-	cin >> line;
-	cerr << "In: " << line << endl;
-	if(line == "Start") {
-		isWhite = true;
-		BoardPoint move = generateMove();
-		playMove(move);
-		cerr << _board << endl;
-		cerr << "Out: " << move << endl;
-		cout << move << endl;
-	} else {
-		isWhite = false;
-		playMove(line);
-	}
-	cerr << _board << endl;
-	
-	// Second move
-	if(isWhite) {
+	for(;;) {
+		// Player move
 		cin >> line;
 		cerr << "In: " << line << endl;
-		if(line == "-1")
-			isWhite = false;
-		else
-			playMove(line);
-	} else {
-		bool swap = true; /// Todo
-		if(swap) {
-			cerr << "Out: -1" << endl;
-			cout << "-1" << endl;
-			isWhite = true;
-		} else {
-			BoardPoint move = generateMove();
+		if(line == "Quit") {
+			cerr << "Quiting" << endl;
+			return;
+		}
+		if(line != "Start") {
+			Move move(line);
+			assert(move.isValid());
 			playMove(move);
-			cerr << _board << endl;
-			cerr << "Out: " << move << endl;
-			cout << move << endl;
+			if(_board.gameOver())
+				break;
 		}
 		
-		// Handle move 3 to enter main loop
-		cin >> line;
-		cerr << "In: " << line << endl;
-		playMove(line);
-	}
-	cerr << _board << endl;
-	
-	// Game loop
-	for(;;) {
+		// Own move
 		BoardPoint move = generateMove();
 		playMove(move);
 		cerr << _board << endl;
@@ -911,59 +1032,81 @@ void GameInputOutput::run()
 		cout << move << endl;
 		if(_board.gameOver())
 			break;
-		cin >> line;
-		cerr << "In: " << line << endl;
-		playMove(line);
-		if(_board.gameOver())
-			break;
 	}
 	cin >> line;
 	cerr << "In: " << line << endl;
-	cerr << "Quiting" << line << endl;
+	cerr << "Quiting" << endl;
 }
 
 Move GameInputOutput::generateMove()
 {
-	for(uint i = 0; i < 7500; ++i)
-		_tree->selectAction();
-	cerr << "nodes: " << TreeNode::numNodes()  << " (" << _tree->visits() << " visits)" << " (";
+	cerr << "Thinking from ";
+	cerr << TreeNode::numNodes()  << " nodes (" << _current->visits() << " visits)" << " (";
 	cerr << (TreeNode::numNodes() * sizeof(TreeNode) / (1024*1024))  << " MB)" << endl;
-	return _tree->bestMove();
+	assert(_current);
+	for(uint i = 0; i < 7500; ++i)
+		_current->selectAction(_board);
+	cerr << "Thought to ";
+	cerr << TreeNode::numNodes()  << " nodes (" << _current->visits() << " visits)" << " (";
+	cerr << (TreeNode::numNodes() * sizeof(TreeNode) / (1024*1024))  << " MB)" << endl;
+	return _current->bestMove();
 }
 
 void GameInputOutput::playMove(Move move)
 {
+	cerr << "Playing " << move;
 	_board.playMove(move);
-	TreeNode* newTree = _tree->child(move);
-	_tree->vincent(newTree);
-	_tree = newTree;
-	cerr << "nodes: " << TreeNode::numNodes() << " (" << _tree->visits() << " visits)"  << endl;
+	TreeNode* vincent = _tree->child(move);
+	assert(vincent);
+	_current->vincent(vincent);
+	_current = vincent;
+	cerr << "nodes: " << TreeNode::numNodes() << " (" << _current->visits() << " visits)"  << endl;
+}
+
+void convertGames(const string& games, const string& out)
+{
+	Board board;
+	TreeNode tree;
+	tree.loadGames(games);
+	tree.write(out);
+}
+
+void ponder(const string& filename)
+{
+	Board board;
+	TreeNode tree;
+	tree.read(filename, -1);
+	tree.scaleStatistics(10);
+	for(uint i = 0; i < 1000000; ++i) {
+		if(i % 10000 == 0) {
+			cerr << "nodes: " << TreeNode::numNodes()  << " (" << tree.visits() << " visits)" << " (";
+			cerr << (TreeNode::numNodes() * sizeof(TreeNode) / (1024*1024))  << " MB)" << endl;
+		}
+		tree.selectAction(board);
+	}
+	tree.write(filename);
 }
 
 int main(int argc, char* argv[])
 {
 	cerr << "R " << argv[0]  << endl;
-	srand(time(0));
-	
-	TreeNode tree;
-	tree.loadGames("competitions-sym.txt");
-	
-	for(uint i = 0; i < 100000; ++i) {
-		if(i % 1000 == 0) {
-			cerr << "nodes: " << TreeNode::numNodes()  << " (" << tree.visits() << " visits)" << " (";
-			cerr << (TreeNode::numNodes() * sizeof(TreeNode) / (1024*1024))  << " MB)" << endl;
-		}
-		tree.selectAction();
-	}
+	cerr << "sizeof(float) = " << sizeof(float) << endl;
+	cerr << "sizeof(uint) = " << sizeof(uint) << endl;
+	cerr << "sizeof(void*) = " << sizeof(void*) << endl;
 	cerr << "sizeof(BoardPoint) = " << sizeof(BoardPoint) << endl;
 	cerr << "sizeof(Move) = " << sizeof(Move) << endl;
 	cerr << "sizeof(BoardMask) = " << sizeof(BoardMask) << endl;
 	cerr << "sizeof(Board) = " << sizeof(Board) << endl;
 	cerr << "sizeof(TreeNode) = " << sizeof(TreeNode) << endl;
+	srand(time(0));
 	
-	return 0;
+	//convertGames("competitions-sym.txt", "itterated.bin");
+	//ponder("itterated.bin");
+	//return 0;
 	
 	GameInputOutput gio;
+	//gio.tree()->read("/home/remco/Persoonlijk/Projects/Codecup/2014 Poly-Y/games.bin");
+	//gio.tree()->read("/home/remco/Persoonlijk/Projects/Codecup/2014 Poly-Y/itterated.bin");
 	gio.run();
 	cerr << "Exit" << endl;
 	return 0;
