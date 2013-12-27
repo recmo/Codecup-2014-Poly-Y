@@ -33,18 +33,20 @@ inline float randomReal()
 
 uint32 entropy(uint upperBound)
 {
-	const static uint32 safety = RAND_MAX / 128;
-	static uint32 entropy = rand();
-	static uint32 used = safety;
+	const static uint32 full = RAND_MAX >> 8; // 8 bit safety margin
+	static uint32 entropy = 0;
+	static uint32 available = 0;
 	
 	// Fill entropy pool
-	used /= upperBound;
-	if(!used) {
+	if(available < upperBound) {
 		entropy = rand();
-		used = safety / upperBound;
+		available = full;
 	}
+	
+	// Take entropy out
 	uint dice = entropy % upperBound;
 	entropy /= upperBound;
+	available /= upperBound;
 	return dice;
 }
 
@@ -57,10 +59,16 @@ bool blackOrWhite(uint numBlack, uint numWhite)
 	if(numWhite == 0)
 		return false;
 	
-	// We can divide out gcd(numBlack, numWhite)
+	// We can divide out gcd(numBlack, numWhite) , let's only do it for powers of two
 	//uint ctz = trailingZeros(numBlack | numWhite);
 	//numBlack >>= ctz;
 	//numWhite >>= ctz;
+	uint orred = numBlack | numWhite;
+	while((orred & 1) == 0) {
+		orred >>= 1;
+		numBlack >>= 1;
+		numWhite >>= 1;
+	}
 	
 	return entropy(numBlack + numWhite) < numBlack;
 }
@@ -610,8 +618,7 @@ void Board::randomFillUp()
 	
 	// Fill up with equal amounts of stones
 	for(auto i = free.itterator(); i; i++) {
-		uint dice = entropy(blackStones + whiteStones);
-		if(dice < whiteStones) {
+		if(blackOrWhite(blackStones, whiteStones)) {
 			_white.set(*i);
 			whiteStones--;
 		} else {
@@ -1116,9 +1123,9 @@ int main(int argc, char* argv[])
 	srand(time(0));
 	
 	//convertGames("competitions-sym.txt", "games.bin");
-	//convertGames("competitions-sym.txt", "itterated.bin");
-	//ponder("itterated.bin");
-	//return 0;
+	// convertGames("competitions-sym.txt", "itterated.bin");
+	// ponder("itterated.bin");
+	// return 0;
 	
 	GameInputOutput gio;
 	//gio.tree()->read("/home/remco/Persoonlijk/Projects/Codecup/2014 Poly-Y/games.bin");
