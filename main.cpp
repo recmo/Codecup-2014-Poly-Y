@@ -919,8 +919,8 @@ Move TreeNode::bestMove() const
 
 float TreeNode::rollOut(const Board& board) const
 {
-	const uint bambooRepeats = 3;
-	const uint fillOutRepeats = 4;
+	const uint bambooRepeats = 1;
+	const uint fillOutRepeats = 1;
 	float result = 0.0;
 	
 	// Do the bamboo bridges
@@ -1043,7 +1043,7 @@ Move GameInputOutput::generateMove()
 	cerr << TreeNode::numNodes()  << " nodes (" << _current->visits() << " visits)" << " (";
 	cerr << (TreeNode::numNodes() * sizeof(TreeNode) / (1024*1024))  << " MB)" << endl;
 	assert(_current);
-	for(uint i = 0; i < 7500; ++i)
+	for(uint i = 0; i < 50000; ++i)
 		_current->selectAction(_board);
 	cerr << "Thought to ";
 	cerr << TreeNode::numNodes()  << " nodes (" << _current->visits() << " visits)" << " (";
@@ -1107,7 +1107,7 @@ int main(int argc, char* argv[])
 	
 	GameInputOutput gio;
 	//gio.tree()->read("/home/remco/Persoonlijk/Projects/Codecup/2014 Poly-Y/games.bin");
-	gio.tree()->read("/home/remco/Persoonlijk/Projects/Codecup/2014 Poly-Y/itterated.bin");
+	//gio.tree()->read("/home/remco/Persoonlijk/Projects/Codecup/2014 Poly-Y/itterated.bin");
 	gio.run();
 	cerr << "Exit" << endl;
 	return 0;
