@@ -657,7 +657,7 @@ public:
 	
 	void selectAction(Board board);
 	bool isLeaf() { return _visits == 0; }
-	float rollOut(const Board& board) const;
+	float rollOut(Board board) const;
 	
 	float visits() const { return _visits; }
 	float totalValue() const { return _totalValue; }
@@ -950,41 +950,19 @@ Move TreeNode::bestMove() const
 	return best->_move;
 }
 
-float TreeNode::rollOut(const Board& board) const
+float TreeNode::rollOut(Board board) const
 {
-	const uint bambooRepeats = 3;
-	const uint fillOutRepeats = 4;
-	float result = 0.0;
+	board.bambooBridges();
+	board.randomFillUp();
 	
-	// Do the bamboo bridges
-	for(uint b = 0; b < bambooRepeats; b++) {
-		// Create bamboo bridges
-		Board bamboo(board);
-		bamboo.bambooBridges();
-		
-		// Early exit if already won
-		uint winner = bamboo.winner();
-		if(winner != 0) {
-			result += ((winner == board.player()) ? 1.0 : 0.0) * fillOutRepeats;
-			continue;
-		}
-		
-		// Do the fill-outs
-		for(uint i = 0; i < fillOutRepeats; i++) {
-			Board fillOut(bamboo);
-			fillOut.randomFillUp();
-			
-			// 0, ½ or 1 point
-			uint winner = fillOut.winner();
-			if(winner == 0)
-				result += 0.5;
-			if(winner == board.player())
-				result += 1.0;
-			else
-				result += 0.0;
-		}
-	}
-	return result / (fillOutRepeats * bambooRepeats);
+	// 0, ½ or 1 point
+	uint winner = board.winner();
+	if(winner == 0)
+		return 0.5;
+	if(winner == board.player())
+		return 1.0;
+	else
+		return 0.0;
 }
 
 void TreeNode::scaleStatistics(uint factor)
@@ -1076,7 +1054,7 @@ Move GameInputOutput::generateMove()
 	cerr << TreeNode::numNodes()  << " nodes (" << _current->visits() << " visits)" << " (";
 	cerr << (TreeNode::numNodes() * sizeof(TreeNode) / (1024*1024))  << " MB)" << endl;
 	assert(_current);
-	for(uint i = 0; i < 7500; ++i)
+	for(uint i = 0; i < 50000; ++i)
 		_current->selectAction(_board);
 	cerr << "Thought to ";
 	cerr << TreeNode::numNodes()  << " nodes (" << _current->visits() << " visits)" << " (";
