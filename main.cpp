@@ -632,6 +632,10 @@ public:
 	~TreeNode();
 	
 	Move move() const { return _move; }
+	float visits() const { return _visits; }
+	float totalValue() const { return _totalValue; }
+	float utcValue() const { return utcValue(log(_parent->visits() + 1)); }
+	float utcValue(float logParentVisits) const;
 	
 	TreeNode* child(Move move);
 	
@@ -658,9 +662,6 @@ public:
 	void selectAction(Board board);
 	bool isLeaf() { return _visits == 0; }
 	float rollOut(Board board) const;
-	
-	float visits() const { return _visits; }
-	float totalValue() const { return _totalValue; }
 	
 	Move bestMove() const;
 	
@@ -695,6 +696,11 @@ TreeNode::~TreeNode()
 	for(TreeNode* c = _child; c; c = c->_sibling)
 		delete c;
 	_numNodes--;
+}
+
+inline float TreeNode::utcValue(float logParentVisits) const
+{
+	return totalValue() / visits() + explorationParameter * sqrt(logParentVisits / visits());
 }
 
 TreeNode* TreeNode::child(Move move)
@@ -839,14 +845,18 @@ void TreeNode::read(istream& in, uint rotation)
 
 TreeNode* TreeNode::select(const Board& board)
 {
+	/// @todo Any unexplored move automatically has precedence
+	
 	// Index over moves
 	uint visits[Move::numIndices];
 	float values[Move::numIndices];
 	bool valid[Move::numIndices];
+	bool unexplored[Move::numIndices];
 	for(uint i = 0; i < Move::numIndices; ++i) {
 		visits[i] = 0;
 		values[i] = 0.0f;
 		valid[i] = false;
+		unexplored[i] = true;
 	}
 	
 	// Swap move
@@ -862,14 +872,42 @@ TreeNode* TreeNode::select(const Board& board)
 	for(TreeNode* c = _child; c; c = c->_sibling) {
 		visits[c->_move.index()] = c->visits();
 		values[c->_move.index()] = c->totalValue();
+		unexplored[c->_move.index()] = false;
 	}
 	
-	// Try existing children first
+	// Try unexplored moves first
+	uint numUnexplored = 0;
+	for(uint i = 0; i < Move::numIndices; ++i) {
+		if(valid[i] && unexplored[i])
+			++numUnexplored;
+	}
+	if(numUnexplored) {
+		uint unexploredIndex = entropy(numUnexplored);
+		for(uint i = 0; i < Move::numIndices; ++i)
+			if(valid[i] && unexplored[i] && unexploredIndex-- == 0)
+				return child(Move::fromIndex(i));
+	}
+	
+	// Try explored children
+	assert(_child);
+	TreeNode* best = _child;
+	const float logParentVisits = log(this->visits() + 1);
+	float bestValue = 0.0;
+	for(TreeNode* c = _child; c; c = c->_sibling) {
+		float uctValue = c->utcValue(logParentVisits);
+		if(uctValue > bestValue) {
+			best = c;
+			bestValue = uctValue;
+		}
+	}
+	return best;
+	
+	/*
 	uint selectedIndex = 0;
 	float bestValue = 0.0;
 	const float logParentVisits = log(this->visits() + 1);
 	for(uint i = 0; i < Move::numIndices; ++i) {
-		if(!valid[i])
+		if(!valid[i] || unexplored[i])
 			continue;
 		float uctValue =
 			values[i] / (visits[i] + epsilon) +
@@ -882,6 +920,7 @@ TreeNode* TreeNode::select(const Board& board)
 	}
 	Move selectedMove = Move::fromIndex(selectedIndex);
 	return child(selectedIndex + 1);
+	*/
 }
 
 void TreeNode::loadGames(const string& filename)
