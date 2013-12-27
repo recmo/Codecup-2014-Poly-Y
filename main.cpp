@@ -33,6 +33,8 @@ inline float randomReal()
 
 uint32 entropy(uint upperBound)
 {
+	return rand() % upperBound;
+	
 	static uint32 entropy = rand();
 	static uint32 used = 0x00FFFFFF;
 	
@@ -632,10 +634,12 @@ public:
 	~TreeNode();
 	
 	Move move() const { return _move; }
-	float visits() const { return _visits; }
-	float totalValue() const { return _totalValue; }
-	float utcValue() const { return utcValue(log(_parent->visits() + 1)); }
-	float utcValue(float logParentVisits) const;
+	float uctValue() const { return uctValue(log(_parent->visits() + 1)); }
+	float uctValue(float logParentVisits) const;
+	float amafValue(float logParentVisits) const;
+	float alphaAmafValue(float alpha, float logParentVisits) const;
+	float raveAlpha() const;
+	float raveValue(float logParentVisits) const { return alphaAmafValue(raveAlpha(), logParentVisits); }
 	
 	TreeNode* child(Move move);
 	
@@ -671,7 +675,9 @@ protected:
 	
 	Move _move;
 	uint _visits;
-	float _totalValue;
+	float _uctValue;
+	uint _amafMatches;
+	float _amafValue;
 	TreeNode* _parent;
 	TreeNode* _child;
 	TreeNode* _sibling;
@@ -683,7 +689,7 @@ uint TreeNode::_numNodes = 0;
 TreeNode::TreeNode(TreeNode* parent, Move move)
 : _move(move)
 , _visits(0)
-, _totalValue(0.0f)
+, _uctValue(0.0f)
 , _parent(parent)
 , _child(nullptr)
 , _sibling(nullptr)
@@ -698,9 +704,27 @@ TreeNode::~TreeNode()
 	_numNodes--;
 }
 
-inline float TreeNode::utcValue(float logParentVisits) const
+inline float TreeNode::uctValue(float logParentVisits) const
 {
-	return totalValue() / visits() + explorationParameter * sqrt(logParentVisits / visits());
+	return _uctValue / _visits  + explorationParameter * sqrt(logParentVisits / _visits);
+}
+
+inline float TreeNode::amafValue(float logParentVisits) const
+{
+	return _amafValue / _amafMatches + explorationParameter * sqrt(logParentVisits / _amafMatches);
+}
+
+inline float TreeNode::alphaAmafValue(float alpha, float logParentVisits) const
+{
+	return alpha * amafValue(logParentVisits) + (1.0 - alpha) * uctValue(logParentVisits);
+}
+
+inline float TreeNode::raveAlpha() const
+{
+	if(_visits >= 5000)
+		return 0.0;
+	float parameter = 5000;
+	return (parameter - _visits) / parameter;
 }
 
 TreeNode* TreeNode::child(Move move)
@@ -755,7 +779,7 @@ void TreeNode::vincent(TreeNode* child)
 
 std::ostream& operator<<(std::ostream& out, const TreeNode& treeNode)
 {
-	out << treeNode.visits() << " " << treeNode._totalValue << " " << treeNode.depth();
+	out << treeNode.visits() << " " << treeNode._uctValue << " " << treeNode.depth();
 	for(const TreeNode* p = &treeNode; p; p = p->_parent)
 		out << " " << p->_move;
 	return out;
@@ -794,7 +818,7 @@ void TreeNode::write(ostream& out, uint treshold) const
 	// Write out this node
 	out.put(_move.index());
 	out.write(reinterpret_cast<const char*>(&_visits), sizeof(_visits));
-	out.write(reinterpret_cast<const char*>(&_totalValue), sizeof(_totalValue));
+	out.write(reinterpret_cast<const char*>(&_uctValue), sizeof(_uctValue));
 	out.put(numTresholdChildren);
 	
 	// Write out child nodes
@@ -829,7 +853,7 @@ void TreeNode::read(istream& in, uint rotation)
 	in.read(reinterpret_cast<char*>(&visits), sizeof(visits));
 	in.read(reinterpret_cast<char*>(&value), sizeof(value));
 	_visits += visits;
-	_totalValue += value;
+	   _uctValue += value;
 	
 	// Read child nodes
 	uint numChildren = in.get();
@@ -875,6 +899,7 @@ TreeNode* TreeNode::select(const Board& board)
 		unexplored[c->_move.index()] = false;
 	}
 	
+	/*
 	// Try unexplored moves first
 	uint numUnexplored = 0;
 	for(uint i = 0; i < Move::numIndices; ++i) {
@@ -901,13 +926,13 @@ TreeNode* TreeNode::select(const Board& board)
 		}
 	}
 	return best;
+	*/
 	
-	/*
 	uint selectedIndex = 0;
 	float bestValue = 0.0;
 	const float logParentVisits = log(this->visits() + 1);
 	for(uint i = 0; i < Move::numIndices; ++i) {
-		if(!valid[i] || unexplored[i])
+		if(!valid[i])
 			continue;
 		float uctValue =
 			values[i] / (visits[i] + epsilon) +
@@ -920,7 +945,6 @@ TreeNode* TreeNode::select(const Board& board)
 	}
 	Move selectedMove = Move::fromIndex(selectedIndex);
 	return child(selectedIndex + 1);
-	*/
 }
 
 void TreeNode::loadGames(const string& filename)
@@ -1002,12 +1026,17 @@ float TreeNode::rollOut(Board board) const
 		return 1.0;
 	else
 		return 0.0;
+	
+	/// @todo discount for depth
+	
+	/// @todo Killer RAVE
+	
 }
 
 void TreeNode::scaleStatistics(uint factor)
 {
 	_visits /= factor;
-	_totalValue /= factor;
+	   _uctValue /= factor;
 	for(TreeNode* c = _child; c; c = c->_sibling)
 		c->scaleStatistics(factor);
 }
@@ -1015,7 +1044,7 @@ void TreeNode::scaleStatistics(uint factor)
 void TreeNode::updateStats(float value)
 {
 	++_visits;
-	_totalValue += value;
+	   _uctValue += value;
 }
 
 void TreeNode::updateStatsUpwards(float value)
