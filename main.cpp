@@ -10,6 +10,7 @@
 using namespace std;
 typedef unsigned int uint;
 typedef unsigned char uint8;
+typedef uint32_t uint32;
 typedef uint64_t uint64;
 typedef signed int sint;
 
@@ -28,6 +29,40 @@ inline uint trailingZeros(uint64 n)
 inline float randomReal()
 {
 	return static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+}
+
+uint32 entropy(uint upperBound)
+{
+	const static uint32 safety = RAND_MAX / 128;
+	static uint32 entropy = rand();
+	static uint32 used = safety;
+	
+	// Fill entropy pool
+	used /= upperBound;
+	if(!used) {
+		entropy = rand();
+		used = safety / upperBound;
+	}
+	uint dice = entropy % upperBound;
+	entropy /= upperBound;
+	return dice;
+}
+
+// true = white
+bool blackOrWhite(uint numBlack, uint numWhite)
+{
+	// Short cut if there is no entropy involved
+	if(numBlack == 0)
+		return true;
+	if(numWhite == 0)
+		return false;
+	
+	// We can divide out gcd(numBlack, numWhite)
+	//uint ctz = trailingZeros(numBlack | numWhite);
+	//numBlack >>= ctz;
+	//numWhite >>= ctz;
+	
+	return entropy(numBlack + numWhite) < numBlack;
 }
 
 class BoardPoint;
@@ -412,7 +447,7 @@ BoardPoint BoardMask::randomPoint() const
 	uint p = popcount();
 	if(p == 0)
 		return BoardPoint();
-	uint n = rand() % p;
+	uint n = entropy(p);
 	Itterator i(*this);
 	while(n--)
 		i++;
@@ -525,7 +560,7 @@ void Board::bambooBridges()
 		BoardMask* player = nullptr;
 		BoardMask* opponent = nullptr;
 		vector<BoardMask>* self = nullptr;
-		if(whiteIndex != whiteGroups.size() && (blackIndex == blackGroups.size() || (rand() % 2))) {
+		if(whiteIndex != whiteGroups.size() && (blackIndex == blackGroups.size() || entropy(2))) {
 			i = whiteIndex++;
 			group = whiteGroups[i];
 			player = &_white;
@@ -575,7 +610,7 @@ void Board::randomFillUp()
 	
 	// Fill up with equal amounts of stones
 	for(auto i = free.itterator(); i; i++) {
-		uint dice = rand() % (blackStones + whiteStones);
+		uint dice = entropy(blackStones + whiteStones);
 		if(dice < whiteStones) {
 			_white.set(*i);
 			whiteStones--;
@@ -1069,11 +1104,12 @@ void ponder(const string& filename)
 int main(int argc, char* argv[])
 {
 	cerr << "R " << argv[0]  << endl;
+	cerr << "RAND_MAX = " << RAND_MAX << endl;
 	cerr << "sizeof(float) = " << sizeof(float) << endl;
 	cerr << "sizeof(uint) = " << sizeof(uint) << endl;
 	cerr << "sizeof(void*) = " << sizeof(void*) << endl;
 	cerr << "sizeof(BoardPoint) = " << sizeof(BoardPoint) << endl;
-	cerr << "sizeof(Move) = " << sizeof(Move) << endl;
+	cerr << "sizeof(Mov e) = " << sizeof(Move) << endl;
 	cerr << "sizeof(BoardMask) = " << sizeof(BoardMask) << endl;
 	cerr << "sizeof(Board) = " << sizeof(Board) << endl;
 	cerr << "sizeof(TreeNode) = " << sizeof(TreeNode) << endl;
