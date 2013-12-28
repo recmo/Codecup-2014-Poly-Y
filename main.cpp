@@ -33,6 +33,8 @@ inline float randomReal()
 
 uint32 entropy(uint upperBound)
 {
+	return rand() % upperBound;
+	
 	const static uint32 full = RAND_MAX >> 8; // 8 bit safety margin
 	static uint32 entropy = 0;
 	static uint32 available = 0;
