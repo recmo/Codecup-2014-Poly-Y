@@ -3,12 +3,14 @@
 #include <string>
 #include <fstream>
 #include <random>
+#include <chrono>
 #include <inttypes.h>
 #include <cassert>
 #include <cstdlib>
 #include <sstream>
 #include <cmath>
 using namespace std;
+using namespace std::chrono;
 typedef unsigned int uint;
 typedef unsigned char uint8;
 typedef uint32_t uint32;
@@ -194,6 +196,7 @@ public:
 	BoardMask connected(const BoardMask& seed) const;
 	vector<BoardMask> groups() const;
 	uint controlledCorners() const;
+	BoardMask winningSet() const;
 	BoardMask& invert() { return operator=(operator~()); }
 	BoardMask& expand() { return operator=(expanded()); }
 	BoardMask& clear() { return operator=(BoardMask()); }
@@ -464,6 +467,40 @@ BoardPoint BoardMask::randomPoint() const
 	return *i;
 }
 
+BoardMask BoardMask::winningSet() const
+{
+	uint corners = 0;
+	BoardMask result;
+	
+	// Iterate connected groups
+	BoardMask remaining(*this);
+	while(remaining) {
+		// Find a group
+		BoardMask group(remaining.firstPoint());
+		group = remaining.connected(group);
+		remaining -= group;
+		
+		// See which borders are connected
+		uint borders = 0;
+		for(uint i = 0; i < 5; ++i)
+			if(group & BoardMask::borders[i])
+				borders |= 1 << i;
+		
+		// If three borders are connected, any adjacent borders have the corner controlled
+		if(::popcount(borders) >= 3) {
+			uint groupCorners = borders & ((borders >> 1) | (borders << 4));
+			if(groupCorners) {
+				corners |= groupCorners;
+				result |= group;
+			}
+		}
+	}
+	if(::popcount(corners) >= 3)
+		return result;
+	else
+		return BoardMask();
+}
+
 class HeatMap {
 public:
 	static HeatMap white;
@@ -702,6 +739,78 @@ void Board::randomFillUp()
 	assert(whiteStones == 0 && blackStones == 0);
 }
 
+class DepthEstimator {
+public:
+	static DepthEstimator instance;
+	DepthEstimator() : _count(0), _total(0) { }
+	~DepthEstimator() { }
+	
+	void reset();
+	void addEstimate(uint depth);
+	float estimate() const;
+	
+protected:
+	uint _count;
+	uint _total;
+};
+
+DepthEstimator DepthEstimator::instance;
+
+void DepthEstimator::reset()
+{
+	_count = 0;
+	_total = 0;
+}
+
+void DepthEstimator::addEstimate(uint depth)
+{
+	++_count;
+	_total += depth;
+}
+
+float DepthEstimator::estimate() const
+{
+	return float(_total) / float(_count);
+}
+
+
+class Timer {
+public:
+	static Timer instance;
+	Timer(uint timeLimit, uint maxRounds);
+	~Timer() { }
+	
+	void nextRound();
+	bool ponder();
+	
+protected:
+	uint _timeLimit;
+	uint _maxRounds;
+	uint _roundLimit;
+	steady_clock::time_point _roundStart;
+};
+
+Timer Timer::instance(1, 53);
+
+Timer::Timer(uint timeLimit, uint maxRounds)
+: _timeLimit(timeLimit)
+, _maxRounds(maxRounds)
+, _roundLimit((_timeLimit * 1000000) / _maxRounds)
+{
+}
+
+void Timer::nextRound()
+{
+	_roundStart = chrono::steady_clock::now();
+}
+
+bool Timer::ponder()
+{
+	steady_clock::time_point now = chrono::steady_clock::now();
+	uint duration = duration_cast<microseconds>(now - _roundStart).count();
+	return duration < _roundLimit;
+}
+
 class TreeNode {
 public:
 	static constexpr int nActions = 5;
@@ -739,7 +848,7 @@ public:
 	
 	void selectAction(Board board);
 	bool isLeaf() { return _visits == 0; }
-	float rollOut(Board board) const;
+	float rollOut(const Board& board) const;
 	
 	float visits() const { return _visits; }
 	float totalValue() const { return _totalValue; }
@@ -774,8 +883,10 @@ TreeNode::TreeNode(TreeNode* parent, Move move)
 
 TreeNode::~TreeNode()
 {
-	for(TreeNode* c = _child; c; c = c->_sibling)
+	for(TreeNode* c = _child, *next = nullptr; c; c = next) {
+		next = c->_sibling;
 		delete c;
+	}
 	_numNodes--;
 }
 
@@ -822,9 +933,12 @@ BoardMask TreeNode::visitedChildren() const
 void TreeNode::vincent(TreeNode* child)
 {
 	// Forget other children
-	for(TreeNode* c = _child; c; c = c->_sibling)
-		if(c != child)
+	for(TreeNode* c = _child, *next = nullptr; c; c = next) {
+		next = c->_sibling;
+		if(c != child) {
 			delete c;
+		}
+	}
 	_child = child;
 	_child->_sibling = nullptr;
 }
@@ -1036,31 +1150,51 @@ Move TreeNode::bestMove() const
 	return best->_move;
 }
 
-float TreeNode::rollOut(Board board) const
+float TreeNode::rollOut(const Board& board) const
 {
-	const uint player = board.player();
-	board.bambooBridges();
-	board.randomFillUp();
-	const uint winner = board.winner();
+	Board fillOut(board);
+	fillOut.bambooBridges();
+	fillOut.randomFillUp();
+	
+	// Find the winner
+	uint winner = 0;
+	BoardMask winningSet = fillOut.white().winningSet();
+	if(winningSet) {
+		winner = 1; // White won
+	} else {
+		winningSet = fillOut.black().winningSet();
+		if(winningSet)
+			winner = 2; // black won
+	}
+	
+	// No winner
+	if(winner == 0) {
+		return 0.5;
+	}
 	
 	// Update HeatMap
 	if(winner == 1)
-		HeatMap::white.add(board.white());
+		HeatMap::white.add(fillOut.white());
 	if(winner == 2)
-		HeatMap::black.add(board.black());
+		HeatMap::black.add(fillOut.black());
+	
+	// Estimate depth
+	if(winner == 1) {
+		BoardMask addedPieces = winningSet - board.white();
+		uint depth = board.moveCount() + (2 * addedPieces.popcount());
+		DepthEstimator::instance.addEstimate(depth);
+	}
+	if(winner == 2) {
+		BoardMask addedPieces = winningSet - board.black();
+		uint depth = board.moveCount() + (2 * addedPieces.popcount());
+		DepthEstimator::instance.addEstimate(depth);
+	}
 	
 	// 0, ½ or 1 point
-	if(winner == 0)
-		return 0.5;
-	if(winner == player)
+	if(winner == board.player())
 		return 1.0;
 	else
 		return 0.0;
-	
-	/// @todo Estimate depth
-	
-	/// @todo Update heatmap
-	
 	
 	/// @todo AMAF
 }
@@ -1159,12 +1293,20 @@ Move GameInputOutput::generateMove()
 	HeatMap::black.scale(10);
 	HeatMap::white.scale(10);
 	
-	// Iterate MCTS a couple of times
-	for(uint i = 0; i < 50000; ++i)
-		_current->selectAction(_board);
+	// Reset depth estimator
+	DepthEstimator::instance.reset();
 	
-	cerr << HeatMap::white << endl;
-	cerr << HeatMap::black << endl;
+	// Iterate MCTS a couple of times
+	Timer::instance.nextRound();
+	while(Timer::instance.ponder()) {
+		for(uint i = 0; i < 100; ++i)
+			_current->selectAction(_board);
+	}
+	
+	// cerr << "White heatmap " << HeatMap::white << endl;
+	// cerr << "Black heatmap " << HeatMap::black << endl;
+	cerr << "Current depth " << _board.moveCount() << endl;
+	cerr << "Estimated total depth " << DepthEstimator::instance.estimate() << endl;
 	
 	cerr << "Thought to ";
 	cerr << TreeNode::numNodes()  << " nodes (" << _current->visits() << " visits)" << " (";
@@ -1177,7 +1319,11 @@ void GameInputOutput::playMove(Move move)
 	_board.playMove(move);
 	TreeNode* vincent = _current->child(move);	
 	assert(vincent);
+	cerr << _current->move() << endl;
+	cerr << vincent->move() << endl;
 	_current->vincent(vincent);
+	cerr << _current->move() << endl;
+	cerr << vincent->move() << endl;
 	_current = vincent;
 	cerr << "Playing " << move << " ";
 	cerr << TreeNode::numNodes()  << " nodes (" << _current->visits() << " visits)" << " (";

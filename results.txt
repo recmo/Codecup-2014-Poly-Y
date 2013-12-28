@@ -109,3 +109,14 @@ Ranking order             Modified    Type  Score
 
 poilio-entrop: heatmap with "mt19937_64"
 
+
+Ranking order             Modified    Type  Score
+-------------------------------------------------
+ 1  polio-50k            (1388102707)   R    191
+ 2  polio-entrop         (1388251941)   R    185
+ 3  polio-50k2           (1388229892)   R    185
+ 4  polio-heatmap        (1388231055)   R    176
+ 5  polio-games          (1388100887)   R    176
+ 6  polio-50k3           (1388224187)   R    175
+ 7  back-propagate       (1381588953)   R    172
+
