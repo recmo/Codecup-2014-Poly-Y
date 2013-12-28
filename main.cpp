@@ -464,8 +464,8 @@ BoardPoint BoardMask::randomPoint() const
 
 class HeatMap {
 public:
-	static HeatMap black;
 	static HeatMap white;
+	static HeatMap black;
 	
 	HeatMap();
 	~HeatMap() { }
@@ -473,13 +473,27 @@ public:
 	void add(BoardMask moves);
 	void scale(uint factor);
 	Move bestMove(BoardMask moves) const;
+	float score(Move move) const;
 	
 protected:
+	friend ostream& operator<<(ostream& out, const HeatMap& heatmap);
+	uint _max;
 	uint _map[Move::maxIndex];
 };
 
+HeatMap HeatMap::white;
+HeatMap HeatMap::black;
+
+ostream& operator<<(ostream& out, const HeatMap& heatmap)
+{
+	for(uint i = 0; i < Move::maxIndex; ++i)
+		out << " " << (float(heatmap._map[i]) / heatmap._max);
+	return out;
+}
+
 HeatMap::HeatMap()
-: _map()
+: _max(0)
+, _map()
 {
 	for(uint i = 0; i < Move::maxIndex; ++i)
 		_map[i] = 0;
@@ -487,12 +501,14 @@ HeatMap::HeatMap()
 
 void HeatMap::add(BoardMask moves)
 {
+	++_max;
 	for(BoardMask::Iterator i = moves.itterator(); i; ++i)
 		++_map[i->index()];
 }
 
 void HeatMap::scale(uint factor)
 {
+	_max /= factor;
 	for(uint i = 0; i < Move::maxIndex; ++i)
 		_map[i] /= factor;
 }
@@ -510,6 +526,12 @@ Move HeatMap::bestMove(BoardMask moves) const
 	}
 	return bestMove;
 }
+
+float HeatMap::score(Move move) const
+{
+	return float(_map[move.index()]) / float(_max);
+}
+
 
 class Board {
 public:
@@ -897,21 +919,25 @@ void TreeNode::read(istream& in, uint rotation)
 
 TreeNode* TreeNode::select(const Board& board)
 {
+	const HeatMap& heatmap = (board.player() == 1) ? HeatMap::white : HeatMap::black;
+	
 	// Index over moves
 	uint visits[Move::numIndices];
 	float values[Move::numIndices];
 	bool valid[Move::numIndices];
+	
+	// Initialize moves with heatmap
 	for(uint i = 0; i < Move::numIndices; ++i) {
-		visits[i] = 0;
-		values[i] = 0.0f;
+		visits[i] = 1;
+		values[i] = heatmap.score(Move::fromIndex(i));
 		valid[i] = false;
 	}
 	
-	// Swap move
+	// Enable swap move if allowed
 	if(board.moveCount() == 1)
 		valid[Move::Swap.index()] = true;
 	
-	// Non swap moves
+	// Enable non swap moves
 	BoardMask moves = board.nonSwapMoves();
 	for(BoardMask::Iterator i = moves.itterator(); i; ++i)
 		valid[i->index()] = true;
@@ -922,7 +948,7 @@ TreeNode* TreeNode::select(const Board& board)
 		values[c->_move.index()] = c->totalValue();
 	}
 	
-	// Try existing children first
+	// UCT select node
 	uint selectedIndex = 0;
 	float bestValue = 0.0;
 	const float logParentVisits = log(this->visits() + 1);
@@ -931,8 +957,8 @@ TreeNode* TreeNode::select(const Board& board)
 			continue;
 		float uctValue =
 			values[i] / (visits[i] + epsilon) +
-			explorationParameter * sqrt(logParentVisits / (visits[i] + epsilon)) +
-			randomReal() * epsilon; // small random number to break ties randomly in unexpanded nodes
+			explorationParameter * sqrt(logParentVisits / (visits[i] + epsilon));
+			// + randomReal() * epsilon; // small random number to break ties randomly in unexpanded nodes
 		if(uctValue > bestValue) {
 			selectedIndex = i;
 			bestValue = uctValue;
@@ -1013,9 +1039,15 @@ float TreeNode::rollOut(Board board) const
 	const uint player = board.player();
 	board.bambooBridges();
 	board.randomFillUp();
+	const uint winner = board.winner();
+	
+	// Update HeatMap
+	if(winner == 1)
+		HeatMap::white.add(board.white());
+	if(winner == 2)
+		HeatMap::black.add(board.black());
 	
 	// 0, ½ or 1 point
-	const uint winner = board.winner();
 	if(winner == 0)
 		return 0.5;
 	if(winner == player)
@@ -1026,6 +1058,7 @@ float TreeNode::rollOut(Board board) const
 	/// @todo Estimate depth
 	
 	/// @todo Update heatmap
+	
 	
 	/// @todo AMAF
 }
@@ -1127,6 +1160,9 @@ Move GameInputOutput::generateMove()
 	// Iterate MCTS a couple of times
 	for(uint i = 0; i < 50000; ++i)
 		_current->selectAction(_board);
+	
+	cerr << HeatMap::white << endl;
+	cerr << HeatMap::black << endl;
 	
 	cerr << "Thought to ";
 	cerr << TreeNode::numNodes()  << " nodes (" << _current->visits() << " visits)" << " (";
