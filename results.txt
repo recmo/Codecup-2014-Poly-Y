@@ -95,3 +95,17 @@ Ranking order             Modified    Type  Score
  5  polio-games          (1388100887)   R    146
  6  back-propagate       (1381588953)   R    145
 
+poilio-entrop: heatmap with "return rand() % upperBound"
+
+Ranking order             Modified    Type  Score
+-------------------------------------------------
+ 1  polio-50k            (1388102707)   R    192
+ 2  polio-entrop         (1388239024)   R    185
+ 3  polio-50k2           (1388229892)   R    184
+ 4  back-propagate       (1381588953)   R    178
+ 5  polio-heatmap        (1388231055)   R    176
+ 6  polio-50k3           (1388224187)   R    175
+ 7  polio-games          (1388100887)   R    170
+
+poilio-entrop: heatmap with "mt19937_64"
+

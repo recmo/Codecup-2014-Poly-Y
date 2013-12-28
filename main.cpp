@@ -2,6 +2,7 @@
 #include <vector>
 #include <string>
 #include <fstream>
+#include <random>
 #include <inttypes.h>
 #include <cassert>
 #include <cstdlib>
@@ -33,13 +34,14 @@ inline float randomReal()
 
 uint32 entropy(uint upperBound)
 {
-	const static uint32 full = RAND_MAX >> 8; // 8 bit safety margin
-	static uint32 entropy = 0;
-	static uint32 available = 0;
+	static std::mt19937_64 engine(time(0));
+	const static uint64 full = (engine.max() - engine.min()) >> 8; // 8 bit safety margin
+	static uint64 entropy = 0;
+	static uint64 available = 0;
 	
 	// Fill entropy pool
 	if(available < upperBound) {
-		entropy = rand();
+		entropy = engine() - engine.min();
 		available = full;
 	}
 	
@@ -959,7 +961,7 @@ TreeNode* TreeNode::select(const Board& board)
 			values[i] / (visits[i] + epsilon) +
 			explorationParameter * sqrt(logParentVisits / (visits[i] + epsilon));
 			// + randomReal() * epsilon; // small random number to break ties randomly in unexpanded nodes
-		if(uctValue > bestValue) {
+		if(uctValue > bestValue || (uctValue == bestValue && entropy(1))) {
 			selectedIndex = i;
 			bestValue = uctValue;
 		}
