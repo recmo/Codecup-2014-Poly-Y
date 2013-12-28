@@ -169,7 +169,7 @@ Move::Move(const string& str)
 
 class BoardMask {
 public:
-	class Itterator;
+	class Iterator; 
 	const static BoardMask fullBoard;
 	const static BoardMask borders[5];
 	
@@ -203,7 +203,7 @@ public:
 	bool isValid() const { return operator==(*this & fullBoard); }
 	BoardPoint firstPoint() const;
 	BoardPoint randomPoint() const;
-	Itterator itterator() const;
+	Iterator itterator() const;
 	
 	uint64 a() const { return _a; }
 	uint64 b() const { return _b; }
@@ -216,13 +216,13 @@ protected:
 	uint64 _b;
 };
 
-class BoardMask::Itterator {
+class BoardMask::Iterator {
 public:
-	Itterator(const BoardMask& mask): _mask(mask), _point(_mask.firstPoint()) { }
-	~Itterator() { }
+	Iterator(const BoardMask& mask): _mask(mask), _point(_mask.firstPoint()) { }
+	~Iterator() { }
 	operator bool() const { return _mask._a | _mask._b; }
-	Itterator& operator++() { _mask.clear(_point); _point = _mask.firstPoint(); return *this; }
-	Itterator operator++(int) { Itterator tmp(*this); operator++(); return tmp; }
+	Iterator& operator++() { _mask.clear(_point); _point = _mask.firstPoint(); return *this; }
+	Iterator operator++(int) { Iterator tmp(*this); operator++(); return tmp; }
 	const BoardPoint& operator*() const { return _point; }
 	const BoardPoint* operator->() const { return &_point; }
 	
@@ -374,15 +374,15 @@ inline BoardMask::BoardMask(BoardPoint point)
 {
 }
 
-inline BoardMask::Itterator BoardMask::itterator() const
+inline BoardMask::Iterator BoardMask::itterator() const
 {
-	return Itterator(*this);
+	return Iterator(*this);
 }
 
 BoardMask BoardMask::expanded() const
 {
 	BoardMask result(*this);
-	for(Itterator i(*this); i; ++i)
+	for(Iterator i(*this); i; ++i)
 		result |= i->neighbors();
 	return result;
 }
@@ -456,10 +456,59 @@ BoardPoint BoardMask::randomPoint() const
 	if(p == 0)
 		return BoardPoint();
 	uint n = entropy(p);
-	Itterator i(*this);
+	Iterator i(*this);
 	while(n--)
 		i++;
 	return *i;
+}
+
+class HeatMap {
+public:
+	static HeatMap black;
+	static HeatMap white;
+	
+	HeatMap();
+	~HeatMap() { }
+	
+	void add(BoardMask moves);
+	void scale(uint factor);
+	Move bestMove(BoardMask moves) const;
+	
+protected:
+	uint _map[Move::maxIndex];
+};
+
+HeatMap::HeatMap()
+: _map()
+{
+	for(uint i = 0; i < Move::maxIndex; ++i)
+		_map[i] = 0;
+}
+
+void HeatMap::add(BoardMask moves)
+{
+	for(BoardMask::Iterator i = moves.itterator(); i; ++i)
+		++_map[i->index()];
+}
+
+void HeatMap::scale(uint factor)
+{
+	for(uint i = 0; i < Move::maxIndex; ++i)
+		_map[i] /= factor;
+}
+
+Move HeatMap::bestMove(BoardMask moves) const
+{
+	uint bestScore = 0;
+	Move bestMove;
+	for(BoardMask::Iterator i = moves.itterator(); i; ++i) {
+		const uint moveScore = _map[i->index()];
+		if(moveScore <= bestScore)
+			continue;
+		bestScore = moveScore;
+		bestMove = *i;
+	}
+	return bestMove;
 }
 
 class Board {
@@ -864,7 +913,7 @@ TreeNode* TreeNode::select(const Board& board)
 	
 	// Non swap moves
 	BoardMask moves = board.nonSwapMoves();
-	for(BoardMask::Itterator i = moves.itterator(); i; ++i)
+	for(BoardMask::Iterator i = moves.itterator(); i; ++i)
 		valid[i->index()] = true;
 	
 	// Load existing child data
@@ -1064,8 +1113,15 @@ Move GameInputOutput::generateMove()
 	cerr << TreeNode::numNodes()  << " nodes (" << _current->visits() << " visits)" << " (";
 	cerr << (TreeNode::numNodes() * sizeof(TreeNode) / (1024*1024))  << " MB)" << endl;
 	assert(_current);
+	
+	// Scale HeatMap down so new entries are valued more
+	HeatMap::black.scale(10);
+	HeatMap::white.scale(10);
+	
+	// Iterate MCTS a couple of times
 	for(uint i = 0; i < 50000; ++i)
 		_current->selectAction(_board);
+	
 	cerr << "Thought to ";
 	cerr << TreeNode::numNodes()  << " nodes (" << _current->visits() << " visits)" << " (";
 	cerr << (TreeNode::numNodes() * sizeof(TreeNode) / (1024*1024))  << " MB)" << endl;
