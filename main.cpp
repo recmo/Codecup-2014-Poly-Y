@@ -568,6 +568,8 @@ Move HeatMap::bestMove(BoardMask moves) const
 
 float HeatMap::score(Move move) const
 {
+	if(_max == 0)
+		return 0.5;
 	return float(_map[move.index()]) / float(_max);
 }
 
@@ -628,10 +630,13 @@ void Board::playMove(Move move)
 	}
 	
 	// Placement move
-	if(_moveCount & 1)
+	assert(!_black.isSet(move));
+	assert(!_white.isSet(move));
+	if(_moveCount & 1) {
 		_black.set(move);
-	else
+	} else {
 		_white.set(move);
+	}
 }
 
 bool Board::gameOver() const
@@ -1080,8 +1085,7 @@ TreeNode* TreeNode::select(const Board& board)
 			bestValue = uctValue;
 		}
 	}
-	Move selectedMove = Move::fromIndex(selectedIndex);
-	return child(selectedIndex + 1);
+	return child(Move::fromIndex(selectedIndex));
 }
 
 void TreeNode::loadGames(const string& filename)
@@ -1318,12 +1322,7 @@ void GameInputOutput::playMove(Move move)
 {
 	_board.playMove(move);
 	TreeNode* vincent = _current->child(move);	
-	assert(vincent);
-	cerr << _current->move() << endl;
-	cerr << vincent->move() << endl;
 	_current->vincent(vincent);
-	cerr << _current->move() << endl;
-	cerr << vincent->move() << endl;
 	_current = vincent;
 	cerr << "Playing " << move << " ";
 	cerr << TreeNode::numNodes()  << " nodes (" << _current->visits() << " visits)" << " (";
