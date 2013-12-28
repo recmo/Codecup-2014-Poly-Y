@@ -70,7 +70,7 @@ bool blackOrWhite(uint numBlack, uint numWhite)
 		numWhite >>= 1;
 	}
 	
-	return entropy(numBlack + numWhite) < numBlack;
+	return entropy(numBlack + numWhite) < numWhite;
 }
 
 class BoardPoint;
@@ -1022,6 +1022,12 @@ float TreeNode::rollOut(Board board) const
 		return 1.0;
 	else
 		return 0.0;
+	
+	/// @todo Estimate depth
+	
+	/// @todo Update heatmap
+	
+	/// @todo AMAF
 }
 
 void TreeNode::scaleStatistics(uint factor)
