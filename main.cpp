@@ -795,7 +795,7 @@ protected:
 	steady_clock::time_point _roundStart;
 };
 
-Timer Timer::instance(1, 53);
+Timer Timer::instance(8, 53);
 
 Timer::Timer(uint timeLimit, uint maxRounds)
 : _timeLimit(timeLimit)
@@ -806,12 +806,12 @@ Timer::Timer(uint timeLimit, uint maxRounds)
 
 void Timer::nextRound()
 {
-	_roundStart = chrono::steady_clock::now();
+	_roundStart = steady_clock::now();
 }
 
 bool Timer::ponder()
 {
-	steady_clock::time_point now = chrono::steady_clock::now();
+	steady_clock::time_point now = steady_clock::now();
 	uint duration = duration_cast<microseconds>(now - _roundStart).count();
 	return duration < _roundLimit;
 }
@@ -834,6 +834,7 @@ public:
 	// Favorite child, forget all other children
 	void vincent(TreeNode* child);
 	
+	TreeNode* top() const;
 	uint depth() const;
 	uint numVisitedChildren() const;
 	BoardMask visitedChildren() const;
@@ -850,6 +851,9 @@ public:
 	void scaleStatistics(uint factor);
 	void updateStatsUpwards(float value);
 	void updateStats(float value);
+	
+	void amafUpdate(float score);
+	void amafRecurse(const Board& board, float score);
 	
 	void selectAction(Board board);
 	bool isLeaf() { return _visits == 0; }
@@ -871,6 +875,7 @@ protected:
 	TreeNode* _child;
 	TreeNode* _sibling;
 	TreeNode* select(const Board& board);
+	void amafRecurse(const Board& board, float score, uint player);
 };
 
 uint TreeNode::_numNodes = 0;
@@ -909,6 +914,14 @@ TreeNode* TreeNode::child(Move move)
 	node->_sibling = _child;
 	_child = node;
 	return node;
+}
+
+TreeNode* TreeNode::top() const
+{
+	for(TreeNode* p = _parent; p; p = p->_parent)
+		if(!p->_parent)
+			return p;
+	return const_cast<TreeNode*>(this);
 }
 
 uint TreeNode::depth() const
@@ -1194,13 +1207,15 @@ float TreeNode::rollOut(const Board& board) const
 		DepthEstimator::instance.addEstimate(depth);
 	}
 	
+	// Update AMAF
+	top()->amafRecurse(fillOut, (winner == 1) ? 1.0 : 0.0);
+	
+	// Update regularly
 	// 0, ½ or 1 point
 	if(winner == board.player())
 		return 1.0;
 	else
 		return 0.0;
-	
-	/// @todo AMAF
 }
 
 void TreeNode::scaleStatistics(uint factor)
@@ -1222,6 +1237,35 @@ void TreeNode::updateStatsUpwards(float value)
 	updateStats(value);
 	if(_parent)
 		_parent->updateStatsUpwards(1.0 - value);
+}
+
+void TreeNode::amafUpdate(float score)
+{
+	++_visits;
+	_totalValue += score;
+}
+
+void TreeNode::amafRecurse(const Board& board, float score)
+{
+	for(TreeNode* c = _child; c; c = c->_sibling)
+		c->amafRecurse(board, score, 1);
+}
+
+void TreeNode::amafRecurse(const Board& board, float score, uint player)
+{
+	// Check compatibility
+	if(player == 1 && !board.white().isSet(_move))
+		return;
+	if(player == 2 && !board.black().isSet(_move))
+		return;
+	
+	// Update
+	amafUpdate(score);
+	
+	// Recurse
+	player = (player == 1) ? 2 : 1;
+	for(TreeNode* c = _child; c; c = c->_sibling)
+		c->amafRecurse(board, 1.0 - score, player);
 }
 
 class GameInputOutput {

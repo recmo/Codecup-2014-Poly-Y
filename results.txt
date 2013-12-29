@@ -120,3 +120,21 @@ Ranking order             Modified    Type  Score
  6  polio-50k3           (1388224187)   R    175
  7  back-propagate       (1381588953)   R    172
 
+
+Ranking order             Modified    Type  Score
+-------------------------------------------------
+ 1  forward-propagate    (1388271411)   R    454
+ 2  back-propagate       (1388271402)   R    437
+ 3  polio-games          (1388271420)   R    432
+ 4  polio-50k            (1388271397)   R    432
+ 5  polio-32s            (1388271378)   R    410
+ 6  polio-16s            (1388271365)   R    396
+ 7  polio-8s             (1388271346)   R    364
+ 8  player3              (1388270981)   R    338
+ 9  polio-4s             (1388271338)   R    328
+10  polio-2s             (1388271328)   R    302
+11  polio-1s             (1388271306)   R    282
+12  player2              (1388270981)   R    265
+13  player1              (1388270981)   R    240
+
+
