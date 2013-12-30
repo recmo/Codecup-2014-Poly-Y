@@ -1,3 +1,4 @@
+
 #include <iostream>
 #include <vector>
 #include <string>
@@ -828,17 +829,22 @@ public:
 	~TreeNode();
 	
 	Move move() const { return _move; }
-	
-	TreeNode* child(Move move);
-	
-	// Favorite child, forget all other children
-	void vincent(TreeNode* child);
-	
-	TreeNode* top() const;
+	uint backwardVisits() const { return _backwardVisits; }
+	uint backwardValue() const { return _backwardValue; }
+	uint forwardVisits() const { return _forwardVisits; }
+	uint forwardValue() const { return _forwardValue; }
+	float backwardScore(float logParentVisits) const;
+	float forwardScore(float logParentVisits) const;
+	float alphaAmafScore(float logParentVisits, float alpha) const;
+	float raveAlpha() const;
+	float raveScore(float logParentVisits) const;
 	uint depth() const;
 	uint numVisitedChildren() const;
 	BoardMask visitedChildren() const;
+	TreeNode* top() const;
+	TreeNode* child(Move move);
 	
+	void vincent(TreeNode* child); ///< Favorite child, forget all other children
 	
 	void loadGames(const string& file);
 	void read(const string& filename, uint rotation = 0);
@@ -849,18 +855,15 @@ public:
 	void writeOut(ostream& out, uint depth) const;
 	
 	void scaleStatistics(uint factor);
-	void updateStatsUpwards(float value);
-	void updateStats(float value);
 	
-	void amafUpdate(float score);
-	void amafRecurse(const Board& board, float score);
+	void backwardRecurse(const Board& endGame, float value);
+	void backwardUpdate(float value);
+	void forwardRecurse(const BoardMask& self, const BoardMask& other, float score);
+	void forwardUpdate(float score);
 	
 	void selectAction(Board board);
-	bool isLeaf() { return _visits == 0; }
-	float rollOut(const Board& board) const;
-	
-	float visits() const { return _visits; }
-	float totalValue() const { return _totalValue; }
+	bool isLeaf() { return !_child; }
+	   void rollOut(const Board& board);
 	
 	Move bestMove() const;
 	
@@ -869,21 +872,24 @@ protected:
 	static uint _numNodes;
 	
 	Move _move;
-	uint _visits;
-	float _totalValue;
+	uint _backwardVisits;
+	float _backwardValue;
+	uint _forwardVisits;
+	float _forwardValue;
 	TreeNode* _parent;
 	TreeNode* _child;
 	TreeNode* _sibling;
 	TreeNode* select(const Board& board);
-	void amafRecurse(const Board& board, float score, uint player);
 };
 
 uint TreeNode::_numNodes = 0;
 
 TreeNode::TreeNode(TreeNode* parent, Move move)
 : _move(move)
-, _visits(0)
-, _totalValue(0.0f)
+, _backwardVisits(0)
+, _backwardValue(0.0)
+, _forwardVisits(0)
+, _forwardValue(0.0)
 , _parent(parent)
 , _child(nullptr)
 , _sibling(nullptr)
@@ -898,6 +904,44 @@ TreeNode::~TreeNode()
 		delete c;
 	}
 	_numNodes--;
+}
+
+std::ostream& operator<<(std::ostream& out, const TreeNode& treeNode)
+{
+	out << treeNode.backwardVisits() << " " << treeNode.backwardValue() << " ";
+	out << treeNode.forwardVisits() << " " << treeNode.forwardValue() << " ";
+	out << treeNode.depth();
+	for(const TreeNode* p = &treeNode; p; p = p->_parent)
+		out << " " << p->_move;
+	return out;
+}
+
+float TreeNode::backwardScore(float logParentVisits) const
+{
+	return backwardValue() / (backwardVisits() + epsilon) + explorationParameter * sqrt(logParentVisits / (backwardVisits() + epsilon));
+}
+
+float TreeNode::forwardScore(float logParentVisits) const
+{
+	return forwardValue() / (forwardVisits() + epsilon) + explorationParameter * sqrt(logParentVisits / (forwardVisits() + epsilon));
+}
+
+float TreeNode::alphaAmafScore(float logParentVisits, float alpha) const
+{
+	return ((1.0 - alpha) * backwardScore(logParentVisits)) + (alpha * forwardScore(logParentVisits));
+}
+
+float TreeNode::raveAlpha() const
+{
+	const float parameterValue = 50000;
+	if(backwardVisits() > parameterValue)
+		return 0.0;
+	return (backwardVisits() - parameterValue) / parameterValue;
+}
+
+float TreeNode::raveScore(float logParentVisits) const
+{
+	return alphaAmafScore(logParentVisits, raveAlpha());
 }
 
 TreeNode* TreeNode::child(Move move)
@@ -961,17 +1005,56 @@ void TreeNode::vincent(TreeNode* child)
 	_child->_sibling = nullptr;
 }
 
-std::ostream& operator<<(std::ostream& out, const TreeNode& treeNode)
+void TreeNode::backwardRecurse(const Board& endGame, float value)
 {
-	out << treeNode.visits() << " " << treeNode._totalValue << " " << treeNode.depth();
-	for(const TreeNode* p = &treeNode; p; p = p->_parent)
-		out << " " << p->_move;
-	return out;
+	backwardUpdate(value);
+	if(_parent)
+		_parent->backwardRecurse(endGame, 1.0 - value);
+	else
+		/// @todo Colours are incorrect if there was a swap!!
+		forwardRecurse(endGame.white(), endGame.black(), value);
+}
+
+void TreeNode::backwardUpdate(float value)
+{
+	++_backwardValue;
+	_backwardValue += value;
+}
+
+void TreeNode::forwardRecurse(const BoardMask& self, const BoardMask& other, float score)
+{
+	// Swap node
+	if(_move == Move::Swap) {
+		forwardUpdate(score);
+		score = 1.0 - score;
+		for(TreeNode* c = _child; c; c = c->_sibling)
+			c->forwardRecurse(self, other, score);
+		
+	// Regular moves
+	} else if(_move.isValid()) {
+		if(!self.isSet(_move))
+			return;
+		forwardUpdate(score);
+		score = 1.0 - score;
+		for(TreeNode* c = _child; c; c = c->_sibling)
+			c->forwardRecurse(other, self, score);
+		
+	// Root node
+	} else {
+		for(TreeNode* c = _child; c; c = c->_sibling)
+			c->forwardRecurse(self, other, score);
+	}
+}
+
+void TreeNode::forwardUpdate(float score)
+{
+	++_forwardVisits;
+	_forwardValue += score;
 }
 
 void TreeNode::writeOut(ostream& out, uint treshold) const
 {
-	if(_visits < treshold)
+	if(backwardVisits() < treshold)
 		return;
 	out << *this << endl;
 	for(TreeNode* c = _child; c; c = c->_sibling)
@@ -990,24 +1073,26 @@ void TreeNode::write(ostream& out, uint treshold) const
 	assert(out.good());
 	
 	// Skip if the number of visits is insufficient
-	if(_visits < treshold)
+	if(backwardVisits() < treshold)
 		return;
 	
 	// Count number of children that pass the threshold
 	uint numTresholdChildren = 0;
 	for(TreeNode* c = _child; c; c = c->_sibling)
-		if(c->_visits >= treshold)
+		if(c->backwardVisits() >= treshold)
 			++numTresholdChildren;
 	
 	// Write out this node
 	out.put(_move.index());
-	out.write(reinterpret_cast<const char*>(&_visits), sizeof(_visits));
-	out.write(reinterpret_cast<const char*>(&_totalValue), sizeof(_totalValue));
+	out.write(reinterpret_cast<const char*>(&_backwardVisits), sizeof(_backwardVisits));
+	out.write(reinterpret_cast<const char*>(&_backwardValue), sizeof(_backwardValue));
+	out.write(reinterpret_cast<const char*>(&_forwardVisits), sizeof(_forwardVisits));
+	out.write(reinterpret_cast<const char*>(&_forwardValue), sizeof(_forwardValue));
 	out.put(numTresholdChildren);
 	
 	// Write out child nodes
 	for(TreeNode* c = _child; c; c = c->_sibling)
-		if(c->_visits >= treshold)
+		if(c->backwardVisits() >= treshold)
 			c->write(out, treshold);
 }
 
@@ -1036,8 +1121,12 @@ void TreeNode::read(istream& in, uint rotation)
 	float value;
 	in.read(reinterpret_cast<char*>(&visits), sizeof(visits));
 	in.read(reinterpret_cast<char*>(&value), sizeof(value));
-	_visits += visits;
-	_totalValue += value;
+	_forwardVisits += visits;
+	_forwardValue += value;
+	in.read(reinterpret_cast<char*>(&visits), sizeof(visits));
+	in.read(reinterpret_cast<char*>(&value), sizeof(value));
+	_backwardVisits += visits;
+	_backwardValue += value;
 	
 	// Read child nodes
 	uint numChildren = in.get();
@@ -1056,13 +1145,12 @@ TreeNode* TreeNode::select(const Board& board)
 	const HeatMap& heatmap = (board.player() == 1) ? HeatMap::white : HeatMap::black;
 	
 	// Index over moves
-	uint visits[Move::numIndices];
-	float values[Move::numIndices];
 	bool valid[Move::numIndices];
+	float values[Move::numIndices];
 	
 	// Initialize moves with heatmap
+	/// @todo Unexplored should outmax explored
 	for(uint i = 0; i < Move::numIndices; ++i) {
-		visits[i] = 1;
 		values[i] = heatmap.score(Move::fromIndex(i));
 		valid[i] = false;
 	}
@@ -1077,25 +1165,20 @@ TreeNode* TreeNode::select(const Board& board)
 		valid[i->index()] = true;
 	
 	// Load existing child data
+	const float logParentVisits = log(this->backwardVisits() + 1);
 	for(TreeNode* c = _child; c; c = c->_sibling) {
-		visits[c->_move.index()] = c->visits();
-		values[c->_move.index()] = c->totalValue();
+		values[c->_move.index()] = c->raveScore(logParentVisits);
 	}
 	
 	// UCT select node
 	uint selectedIndex = 0;
 	float bestValue = 0.0;
-	const float logParentVisits = log(this->visits() + 1);
 	for(uint i = 0; i < Move::numIndices; ++i) {
 		if(!valid[i])
 			continue;
-		float uctValue =
-			values[i] / (visits[i] + epsilon) +
-			explorationParameter * sqrt(logParentVisits / (visits[i] + epsilon));
-			// + randomReal() * epsilon; // small random number to break ties randomly in unexpanded nodes
-		if(uctValue > bestValue || (uctValue == bestValue && entropy(1))) {
+		if(values[i] > bestValue || (values[i] == bestValue && entropy(1))) {
 			selectedIndex = i;
-			bestValue = uctValue;
+			bestValue = values[i];
 		}
 	}
 	return child(Move::fromIndex(selectedIndex));
@@ -1134,7 +1217,7 @@ void TreeNode::loadGames(const string& filename)
 			float value = (board.winner() == board.player()) ? 1.0 : 0.0;
 			// value = 1.0 - value;
 			for(uint i = 0; i < 10; ++i)
-				gameState->updateStatsUpwards(value);
+				gameState->backwardRecurse(board, value);
 		}
 	}
 }
@@ -1152,8 +1235,7 @@ void TreeNode::selectAction(Board board)
 		current = newNode;
 		board.playMove(current->_move);
 	}
-	float value = current->rollOut(board);
-	current->updateStatsUpwards(value);
+	current->rollOut(board);
 }
 
 Move TreeNode::bestMove() const
@@ -1161,13 +1243,13 @@ Move TreeNode::bestMove() const
 	// Find node with highest playout count
 	TreeNode* best = nullptr;
 	for(TreeNode* c = _child; c; c = c->_sibling)
-		if(!best || c->_visits > best->_visits)
+		if(!best || c->backwardVisits() > best->backwardVisits())
 			best = c;
 	assert(best);
 	return best->_move;
 }
 
-float TreeNode::rollOut(const Board& board) const
+void TreeNode::rollOut(const Board& board)
 {
 	Board fillOut(board);
 	fillOut.bambooBridges();
@@ -1185,9 +1267,6 @@ float TreeNode::rollOut(const Board& board) const
 	}
 	
 	// No winner
-	if(winner == 0) {
-		return 0.5;
-	}
 	
 	// Update HeatMap
 	if(winner == 1)
@@ -1207,65 +1286,22 @@ float TreeNode::rollOut(const Board& board) const
 		DepthEstimator::instance.addEstimate(depth);
 	}
 	
-	// Update AMAF
-	top()->amafRecurse(fillOut, (winner == 1) ? 1.0 : 0.0);
-	
-	// Update regularly
-	// 0, ½ or 1 point
-	if(winner == board.player())
-		return 1.0;
+	// Update scores
+	if(winner == 0)
+		backwardRecurse(fillOut, 0.5);
 	else
-		return 0.0;
+		backwardRecurse(fillOut, (winner == board.player()) ? 1.0 : 0.0);
 }
 
 void TreeNode::scaleStatistics(uint factor)
 {
-	_visits /= factor;
-	_totalValue /= factor;
+
+	_backwardVisits /= factor;
+	_backwardValue /= factor;
+	_forwardVisits /= factor;
+	_forwardValue /= factor;
 	for(TreeNode* c = _child; c; c = c->_sibling)
 		c->scaleStatistics(factor);
-}
-
-void TreeNode::updateStats(float value)
-{
-	++_visits;
-	_totalValue += value;
-}
-
-void TreeNode::updateStatsUpwards(float value)
-{
-	updateStats(value);
-	if(_parent)
-		_parent->updateStatsUpwards(1.0 - value);
-}
-
-void TreeNode::amafUpdate(float score)
-{
-	++_visits;
-	_totalValue += score;
-}
-
-void TreeNode::amafRecurse(const Board& board, float score)
-{
-	for(TreeNode* c = _child; c; c = c->_sibling)
-		c->amafRecurse(board, score, 1);
-}
-
-void TreeNode::amafRecurse(const Board& board, float score, uint player)
-{
-	// Check compatibility
-	if(player == 1 && !board.white().isSet(_move))
-		return;
-	if(player == 2 && !board.black().isSet(_move))
-		return;
-	
-	// Update
-	amafUpdate(score);
-	
-	// Recurse
-	player = (player == 1) ? 2 : 1;
-	for(TreeNode* c = _child; c; c = c->_sibling)
-		c->amafRecurse(board, 1.0 - score, player);
 }
 
 class GameInputOutput {
@@ -1333,7 +1369,7 @@ void GameInputOutput::run()
 Move GameInputOutput::generateMove()
 {
 	cerr << "Thinking from ";
-	cerr << TreeNode::numNodes()  << " nodes (" << _current->visits() << " visits)" << " (";
+	cerr << TreeNode::numNodes()  << " nodes (" << _current->backwardVisits() << " visits)" << " (";
 	cerr << (TreeNode::numNodes() * sizeof(TreeNode) / (1024*1024))  << " MB)" << endl;
 	assert(_current);
 	
@@ -1357,7 +1393,7 @@ Move GameInputOutput::generateMove()
 	cerr << "Estimated total depth " << DepthEstimator::instance.estimate() << endl;
 	
 	cerr << "Thought to ";
-	cerr << TreeNode::numNodes()  << " nodes (" << _current->visits() << " visits)" << " (";
+	cerr << TreeNode::numNodes()  << " nodes (" << _current->backwardVisits() << " visits)" << " (";
 	cerr << (TreeNode::numNodes() * sizeof(TreeNode) / (1024*1024))  << " MB)" << endl;
 	return _current->bestMove();
 }
@@ -1369,7 +1405,7 @@ void GameInputOutput::playMove(Move move)
 	_current->vincent(vincent);
 	_current = vincent;
 	cerr << "Playing " << move << " ";
-	cerr << TreeNode::numNodes()  << " nodes (" << _current->visits() << " visits)" << " (";
+	cerr << TreeNode::numNodes()  << " nodes (" << _current->backwardVisits() << " visits)" << " (";
 	cerr << (TreeNode::numNodes() * sizeof(TreeNode) / (1024*1024))  << " MB)" << endl;
 }
 
@@ -1389,7 +1425,7 @@ void ponder(const string& filename)
 	tree.scaleStatistics(10);
 	for(uint i = 0; i < 1000000; ++i) {
 		if(i % 10000 == 0) {
-			cerr << "nodes: " << TreeNode::numNodes()  << " (" << tree.visits() << " visits)" << " (";
+			cerr << "nodes: " << TreeNode::numNodes()  << " (" << tree.backwardVisits() << " visits)" << " (";
 			cerr << (TreeNode::numNodes() * sizeof(TreeNode) / (1024*1024))  << " MB)" << endl;
 		}
 		tree.selectAction(board);
