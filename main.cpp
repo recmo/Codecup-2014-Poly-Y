@@ -80,7 +80,7 @@ inline float randomReal()
 class Timer {
 public:
 	static Timer instance;
-	Timer(uint timeLimit, uint maxRounds);
+	Timer(uint timeLimit, uint expectedRounds, uint maxRounds);
 	~Timer() { }
 	
 	void nextRound();
@@ -88,23 +88,36 @@ public:
 	
 protected:
 	uint _timeLimit;
+	uint _currentRound;
+	uint _expectedRounds;
 	uint _maxRounds;
 	uint _roundLimit;
+	uint _endRoundLimit;
 	clock_t _roundStart;
 };
 
-Timer Timer::instance(35, 53);
+// Most games last 30-60 moves -> average 20 moves per player out of max 53
+#ifdef LOCAL
+Timer Timer::instance(14, 30, 53);
+#else
+Timer Timer::instance(35, 30, 53);
+#endif
 
-Timer::Timer(uint timeLimit, uint maxRounds)
+Timer::Timer(uint timeLimit, uint expectedRounds,  uint maxRounds)
 : _timeLimit(timeLimit)
+, _currentRound(0)
+, _expectedRounds(expectedRounds)
 , _maxRounds(maxRounds)
-, _roundLimit((_timeLimit * 1000) / _maxRounds)
+, _roundLimit(0)
 , _roundStart()
 {
+	_roundLimit = (_timeLimit * 900) / _expectedRounds;
+	_endRoundLimit = (_timeLimit * 100) / (_maxRounds - _expectedRounds);
 }
 
 void Timer::nextRound()
 {
+	++_currentRound;
 	_roundStart = clock();
 }
 
@@ -112,7 +125,7 @@ bool Timer::ponder()
 {
 	clock_t now = clock();
 	uint duration = (1000 * (now - _roundStart)) / CLOCKS_PER_SEC;
-	return duration < _roundLimit;
+	return duration < ((_currentRound < _expectedRounds) ? _roundLimit : _endRoundLimit);
 }
 
 class BoardPoint;
@@ -1192,6 +1205,7 @@ int main(int argc, char* argv[])
 	trace(CLOCKS_PER_SEC);
 	trace(sizeof(float));
 	trace(sizeof(uint));
+	trace(sizeof(uint64));
 	trace(sizeof(void*));
 	cerr << "sizeof(BoardPoint) = " << sizeof(BoardPoint) << endl;
 	cerr << "sizeof(Move) = " << sizeof(Move) << endl;
