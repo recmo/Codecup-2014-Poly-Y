@@ -620,8 +620,7 @@ void Board::randomFillUp()
 	
 	// Fill up with equal amounts of stones
 	for(auto i = free.itterator(); i; i++) {
-		uint dice = entropy(blackStones + whiteStones);
-		if(dice < whiteStones) {
+		if(blackOrWhite(blackStones, whiteStones)) {
 			_white.set(*i);
 			whiteStones--;
 		} else {
