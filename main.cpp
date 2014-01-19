@@ -98,7 +98,7 @@ protected:
 
 // Most games last 30-60 moves -> spend most time on the fist 25 moves per player out of max 53
 #ifdef LOCAL
-Timer Timer::instance(14, 25, 53); // Equivalent in cpu power to 
+Timer Timer::instance(11, 25, 53); // Equivalent in cpu power to 
 #else
 Timer Timer::instance(29, 25, 53);
 #endif
