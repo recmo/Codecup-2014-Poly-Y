@@ -96,11 +96,11 @@ protected:
 	clock_t _roundStart;
 };
 
-// Most games last 30-60 moves -> average 20 moves per player out of max 53
+// Most games last 30-60 moves -> spend most time on the fist 25 moves per player out of max 53
 #ifdef LOCAL
-Timer Timer::instance(14, 25, 53);
+Timer Timer::instance(14, 25, 53); // Equivalent in cpu power to 
 #else
-Timer Timer::instance(35, 25, 53);
+Timer Timer::instance(29, 25, 53);
 #endif
 
 Timer::Timer(uint timeLimit, uint expectedRounds,  uint maxRounds)
