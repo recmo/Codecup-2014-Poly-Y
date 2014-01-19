@@ -18,6 +18,14 @@ typedef uint32_t uint32;
 typedef uint64_t uint64;
 typedef signed int sint;
 
+constexpr int HistoryHeuristicDecay = 5;
+constexpr float HistoryHeuristicCoefficient = 4.0;
+constexpr float ExplorationCoefficient = 0.7;
+constexpr uint ThinkTime = 8;
+// constexpr uint thinkTime = 32;
+
+#define trace(exp) cerr << "Trace: " << #exp << " = " << (exp) << endl;
+
 bool debug = false;
 
 inline uint popcount(uint64 n)
@@ -37,24 +45,6 @@ inline float randomReal()
 
 uint32 entropy(uint upperBound)
 {
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-	return rand() % upperBound;
-	
->>>>>>> rave
-	static uint32 entropy = rand();
-	static uint32 used = 0x00FFFFFF;
-	
-	// Fill entropy pool
-	used /= upperBound;
-	if(!used) {
-		entropy = rand();
-		used = 0x00FFFFFF / upperBound;
-	}
-	uint dice = entropy % upperBound;
-	entropy /= upperBound;
-=======
 	static std::mt19937_64 engine(time(0));
 	const static uint64 full = (engine.max() - engine.min()) >> 8; // 8 bit safety margin
 	static uint64 entropy = 0;
@@ -70,7 +60,6 @@ uint32 entropy(uint upperBound)
 	uint dice = entropy % upperBound;
 	entropy /= upperBound;
 	available /= upperBound;
->>>>>>> heatmap
 	return dice;
 }
 
@@ -83,14 +72,6 @@ bool blackOrWhite(uint numBlack, uint numWhite)
 	if(numWhite == 0)
 		return false;
 	
-<<<<<<< HEAD
-	// We can divide out gcd(numBlack, numWhite)
-	//uint ctz = trailingZeros(numBlack | numWhite);
-	//numBlack >>= ctz;
-	//numWhite >>= ctz;
-	
-	return entropy(numBlack + numWhite) < numBlack;
-=======
 	// We can divide out gcd(numBlack, numWhite) , let's only do it for powers of two
 	//uint ctz = trailingZeros(numBlack | numWhite);
 	//numBlack >>= ctz;
@@ -103,7 +84,6 @@ bool blackOrWhite(uint numBlack, uint numWhite)
 	}
 	
 	return entropy(numBlack + numWhite) < numWhite;
->>>>>>> heatmap
 }
 
 class BoardPoint;
@@ -490,11 +470,7 @@ BoardPoint BoardMask::randomPoint() const
 	if(p == 0)
 		return BoardPoint();
 	uint n = entropy(p);
-<<<<<<< HEAD
-	Itterator i(*this);
-=======
 	Iterator i(*this);
->>>>>>> heatmap
 	while(n--)
 		i++;
 	return *i;
@@ -534,36 +510,37 @@ BoardMask BoardMask::winningSet() const
 		return BoardMask();
 }
 
-class HeatMap {
+class HistoryHeuristic {
 public:
-	static HeatMap white;
-	static HeatMap black;
+	static HistoryHeuristic white;
+	static HistoryHeuristic black;
 	
-	HeatMap();
-	~HeatMap() { }
+	HistoryHeuristic();
+	~HistoryHeuristic() { }
 	
 	void add(BoardMask moves);
+	
 	void scale(uint factor);
 	Move bestMove(BoardMask moves) const;
 	float score(Move move) const;
 	
 protected:
-	friend ostream& operator<<(ostream& out, const HeatMap& heatmap);
+	friend ostream& operator<<(ostream& out, const HistoryHeuristic& heatmap);
 	uint _max;
 	uint _map[Move::maxIndex];
 };
 
-HeatMap HeatMap::white;
-HeatMap HeatMap::black;
+HistoryHeuristic HistoryHeuristic::white;
+HistoryHeuristic HistoryHeuristic::black;
 
-ostream& operator<<(ostream& out, const HeatMap& heatmap)
+ostream& operator<<(ostream& out, const HistoryHeuristic& heatmap)
 {
 	for(uint i = 0; i < Move::maxIndex; ++i)
 		out << " " << (float(heatmap._map[i]) / heatmap._max);
 	return out;
 }
 
-HeatMap::HeatMap()
+HistoryHeuristic::HistoryHeuristic()
 : _max(0)
 , _map()
 {
@@ -571,21 +548,21 @@ HeatMap::HeatMap()
 		_map[i] = 0;
 }
 
-void HeatMap::add(BoardMask moves)
+void HistoryHeuristic::add(BoardMask moves)
 {
 	++_max;
 	for(BoardMask::Iterator i = moves.itterator(); i; ++i)
 		++_map[i->index()];
 }
 
-void HeatMap::scale(uint factor)
+void HistoryHeuristic::scale(uint factor)
 {
 	_max /= factor;
 	for(uint i = 0; i < Move::maxIndex; ++i)
 		_map[i] /= factor;
 }
 
-Move HeatMap::bestMove(BoardMask moves) const
+Move HistoryHeuristic::bestMove(BoardMask moves) const
 {
 	uint bestScore = 0;
 	Move bestMove;
@@ -599,7 +576,7 @@ Move HeatMap::bestMove(BoardMask moves) const
 	return bestMove;
 }
 
-float HeatMap::score(Move move) const
+float HistoryHeuristic::score(Move move) const
 {
 	if(_max == 0)
 		return 0.5;
@@ -828,7 +805,7 @@ protected:
 	steady_clock::time_point _roundStart;
 };
 
-Timer Timer::instance(8, 53);
+Timer Timer::instance(ThinkTime, 53);
 
 Timer::Timer(uint timeLimit, uint maxRounds)
 : _timeLimit(timeLimit)
@@ -851,9 +828,8 @@ bool Timer::ponder()
 
 class TreeNode {
 public:
-	static constexpr int nActions = 5;
 	static constexpr float epsilon = 1e-6;
-	static constexpr float explorationParameter = sqrt(2.0);
+	static constexpr float explorationParameter = ExplorationCoefficient;
 	static uint numNodes() { return _numNodes; }
 	
 	TreeNode(): TreeNode(nullptr, Move()) {}
@@ -861,27 +837,7 @@ public:
 	~TreeNode();
 	
 	Move move() const { return _move; }
-<<<<<<< HEAD
-<<<<<<< HEAD
-	float visits() const { return _visits; }
-	float totalValue() const { return _totalValue; }
-	float utcValue() const { return utcValue(log(_parent->visits() + 1)); }
-	float utcValue(float logParentVisits) const;
-=======
-	float uctValue() const { return uctValue(log(_parent->visits() + 1)); }
-	float uctValue(float logParentVisits) const;
-	float amafValue(float logParentVisits) const;
-	float alphaAmafValue(float alpha, float logParentVisits) const;
-	float raveAlpha() const;
-	float raveValue(float logParentVisits) const { return alphaAmafValue(raveAlpha(), logParentVisits); }
->>>>>>> rave
 	
-	TreeNode* child(Move move);
-	
-	// Favorite child, forget all other children
-	void vincent(TreeNode* child);
-	
-=======
 	uint backwardVisits() const { return _backwardVisits; }
 	uint backwardValue() const { return _backwardValue; }
 	uint forwardVisits() const { return _forwardVisits; }
@@ -891,15 +847,14 @@ public:
 	float alphaAmafScore(float logParentVisits, float alpha) const;
 	float raveAlpha() const;
 	float raveScore(float logParentVisits) const;
->>>>>>> heatmap
+	
 	uint depth() const;
 	uint numVisitedChildren() const;
 	BoardMask visitedChildren() const;
 	TreeNode* top() const;
 	bool isLeaf() const { return !_child; }
 	TreeNode* child(Move move);
-	
-	void vincent(TreeNode* child); ///< Favorite child, forget all other children
+	void vincent(TreeNode* child);
 	
 	void loadGames(const string& file);
 	void read(const string& filename, uint rotation = 0);
@@ -911,11 +866,6 @@ public:
 	
 	void scaleStatistics(uint factor);
 	
-<<<<<<< HEAD
-	void selectAction(Board board);
-	bool isLeaf() { return _visits == 0; }
-	float rollOut(Board board) const;
-=======
 	void backwardRecurse(const Board& endGame, float value);
 	void backwardUpdate(float value);
 	void forwardRecurse(const BoardMask& self, const BoardMask& other, float score);
@@ -923,7 +873,6 @@ public:
 	
 	void selectAction(Board board);
    void rollOut(const Board& board);
->>>>>>> heatmap
 	
 	Move bestMove() const;
 	
@@ -932,17 +881,10 @@ protected:
 	static uint _numNodes;
 	
 	Move _move;
-<<<<<<< HEAD
 	uint _backwardVisits;
 	float _backwardValue;
 	uint _forwardVisits;
 	float _forwardValue;
-=======
-	uint _visits;
-	float _uctValue;
-	uint _amafMatches;
-	float _amafValue;
->>>>>>> rave
 	TreeNode* _parent;
 	TreeNode* _child;
 	TreeNode* _sibling;
@@ -953,15 +895,10 @@ uint TreeNode::_numNodes = 0;
 
 TreeNode::TreeNode(TreeNode* parent, Move move)
 : _move(move)
-<<<<<<< HEAD
 , _backwardVisits(0)
 , _backwardValue(0.0)
 , _forwardVisits(0)
 , _forwardValue(0.0)
-=======
-, _visits(0)
-, _uctValue(0.0f)
->>>>>>> rave
 , _parent(parent)
 , _child(nullptr)
 , _sibling(nullptr)
@@ -978,12 +915,6 @@ TreeNode::~TreeNode()
 	_numNodes--;
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-inline float TreeNode::utcValue(float logParentVisits) const
-{
-	return totalValue() / visits() + explorationParameter * sqrt(logParentVisits / visits());
-=======
 std::ostream& operator<<(std::ostream& out, const TreeNode& treeNode)
 {
 	out << treeNode.backwardVisits() << " " << treeNode.backwardValue() << " ";
@@ -992,58 +923,6 @@ std::ostream& operator<<(std::ostream& out, const TreeNode& treeNode)
 	for(const TreeNode* p = &treeNode; p; p = p->_parent)
 		out << " " << p->_move;
 	return out;
-}
-
-float TreeNode::backwardScore(float logParentVisits) const
-{
-	return backwardValue() / (backwardVisits() + epsilon) + explorationParameter * sqrt(logParentVisits / (backwardVisits() + epsilon));
-}
-
-float TreeNode::forwardScore(float logParentVisits) const
-{
-	return forwardValue() / (forwardVisits() + epsilon) + explorationParameter * sqrt(logParentVisits / (forwardVisits() + epsilon));
-}
-
-float TreeNode::alphaAmafScore(float logParentVisits, float alpha) const
-{
-	return ((1.0 - alpha) * backwardScore(logParentVisits)) + (alpha * forwardScore(logParentVisits));
-}
-
-float TreeNode::raveAlpha() const
-{
-	const float parameterValue = 50000;
-	if(backwardVisits() > parameterValue)
-		return 0.0;
-	return (backwardVisits() - parameterValue) / parameterValue;
-}
-
-float TreeNode::raveScore(float logParentVisits) const
-{
-	return alphaAmafScore(logParentVisits, raveAlpha());
->>>>>>> heatmap
-=======
-inline float TreeNode::uctValue(float logParentVisits) const
-{
-	return _uctValue / _visits  + explorationParameter * sqrt(logParentVisits / _visits);
-}
-
-inline float TreeNode::amafValue(float logParentVisits) const
-{
-	return _amafValue / _amafMatches + explorationParameter * sqrt(logParentVisits / _amafMatches);
-}
-
-inline float TreeNode::alphaAmafValue(float alpha, float logParentVisits) const
-{
-	return alpha * amafValue(logParentVisits) + (1.0 - alpha) * uctValue(logParentVisits);
-}
-
-inline float TreeNode::raveAlpha() const
-{
-	if(_visits >= 5000)
-		return 0.0;
-	float parameter = 5000;
-	return (parameter - _visits) / parameter;
->>>>>>> rave
 }
 
 TreeNode* TreeNode::child(Move move)
@@ -1109,19 +988,25 @@ void TreeNode::vincent(TreeNode* child)
 
 void TreeNode::backwardRecurse(const Board& endGame, float value)
 {
-<<<<<<< HEAD
 	backwardUpdate(value);
 	if(_parent)
 		_parent->backwardRecurse(endGame, 1.0 - value);
+	/*
 	else
 		/// @todo Colours are incorrect if there was a swap!!
 		forwardRecurse(endGame.white(), endGame.black(), value);
+	*/
 }
 
 void TreeNode::backwardUpdate(float value)
 {
-	++_backwardValue;
+	++_backwardVisits;
 	_backwardValue += value;
+}
+
+float TreeNode::backwardScore(float logParentVisits) const
+{
+	return backwardValue() / (backwardVisits() + epsilon) + 2.0 * explorationParameter * sqrt(2.0 * logParentVisits / (backwardVisits() + epsilon));
 }
 
 void TreeNode::forwardRecurse(const BoardMask& self, const BoardMask& other, float score)
@@ -1153,12 +1038,29 @@ void TreeNode::forwardUpdate(float score)
 {
 	++_forwardVisits;
 	_forwardValue += score;
-=======
-	out << treeNode.visits() << " " << treeNode._uctValue << " " << treeNode.depth();
-	for(const TreeNode* p = &treeNode; p; p = p->_parent)
-		out << " " << p->_move;
-	return out;
->>>>>>> rave
+}
+
+float TreeNode::forwardScore(float logParentVisits) const
+{
+	return forwardValue() / (forwardVisits() + epsilon) + 2.0 * explorationParameter * sqrt(2.0 * logParentVisits / (forwardVisits() + epsilon));
+}
+
+float TreeNode::alphaAmafScore(float logParentVisits, float alpha) const
+{
+	return ((1.0 - alpha) * backwardScore(logParentVisits)) + (alpha * forwardScore(logParentVisits));
+}
+
+float TreeNode::raveAlpha() const
+{
+	const float parameterValue = 50000;
+	if(backwardVisits() > parameterValue)
+		return 0.0;
+	return (backwardVisits() - parameterValue) / parameterValue;
+}
+
+float TreeNode::raveScore(float logParentVisits) const
+{
+	return alphaAmafScore(logParentVisits, raveAlpha());
 }
 
 void TreeNode::writeOut(ostream& out, uint treshold) const
@@ -1193,15 +1095,10 @@ void TreeNode::write(ostream& out, uint treshold) const
 	
 	// Write out this node
 	out.put(_move.index());
-<<<<<<< HEAD
 	out.write(reinterpret_cast<const char*>(&_backwardVisits), sizeof(_backwardVisits));
 	out.write(reinterpret_cast<const char*>(&_backwardValue), sizeof(_backwardValue));
 	out.write(reinterpret_cast<const char*>(&_forwardVisits), sizeof(_forwardVisits));
 	out.write(reinterpret_cast<const char*>(&_forwardValue), sizeof(_forwardValue));
-=======
-	out.write(reinterpret_cast<const char*>(&_visits), sizeof(_visits));
-	out.write(reinterpret_cast<const char*>(&_uctValue), sizeof(_uctValue));
->>>>>>> rave
 	out.put(numTresholdChildren);
 	
 	// Write out child nodes
@@ -1213,7 +1110,7 @@ void TreeNode::write(ostream& out, uint treshold) const
 void TreeNode::read(const string& filename, uint rotation)
 {
 	cerr << "Reading " << filename << endl;
-	if(rotation == -1) {
+	if(rotation == uint(-1)) {
 		for(rotation = 0; rotation < Move::maxRotation; ++rotation)
 			read(filename, rotation);
 		return;
@@ -1235,17 +1132,12 @@ void TreeNode::read(istream& in, uint rotation)
 	float value;
 	in.read(reinterpret_cast<char*>(&visits), sizeof(visits));
 	in.read(reinterpret_cast<char*>(&value), sizeof(value));
-<<<<<<< HEAD
 	_forwardVisits += visits;
 	_forwardValue += value;
 	in.read(reinterpret_cast<char*>(&visits), sizeof(visits));
 	in.read(reinterpret_cast<char*>(&value), sizeof(value));
 	_backwardVisits += visits;
 	_backwardValue += value;
-=======
-	_visits += visits;
-	   _uctValue += value;
->>>>>>> rave
 	
 	// Read child nodes
 	uint numChildren = in.get();
@@ -1261,26 +1153,21 @@ void TreeNode::read(istream& in, uint rotation)
 
 TreeNode* TreeNode::select(const Board& board)
 {
-<<<<<<< HEAD
-	/// @todo Any unexplored move automatically has precedence
-=======
-	const HeatMap& heatmap = (board.player() == 1) ? HeatMap::white : HeatMap::black;
->>>>>>> heatmap
+	// Find non-swap moves
+	const BoardMask moves = board.nonSwapMoves();
+	if(moves.isEmpty())
+		return this;
+	const HistoryHeuristic& heatmap = (board.player() == 1) ? HistoryHeuristic::white : HistoryHeuristic::black;
 	
 	// Index over moves
 	bool valid[Move::numIndices];
-<<<<<<< HEAD
-	bool unexplored[Move::numIndices];
-=======
 	float values[Move::numIndices];
 	
 	// Initialize moves with heatmap
-	/// @todo Unexplored should outmax explored
->>>>>>> heatmap
 	for(uint i = 0; i < Move::numIndices; ++i) {
-		values[i] = heatmap.score(Move::fromIndex(i));
+		// n = 0 -> infinity
+		values[i] = HistoryHeuristicCoefficient * heatmap.score(Move::fromIndex(i));
 		valid[i] = false;
-		unexplored[i] = true;
 	}
 	
 	// Enable swap move if allowed
@@ -1288,58 +1175,17 @@ TreeNode* TreeNode::select(const Board& board)
 		valid[Move::Swap.index()] = true;
 	
 	// Enable non swap moves
-	BoardMask moves = board.nonSwapMoves();
 	for(BoardMask::Iterator i = moves.itterator(); i; ++i)
 		valid[i->index()] = true;
 	
 	// Load existing child data
 	const float logParentVisits = log(this->backwardVisits() + 1);
 	for(TreeNode* c = _child; c; c = c->_sibling) {
-<<<<<<< HEAD
-		visits[c->_move.index()] = c->visits();
-		values[c->_move.index()] = c->totalValue();
-		unexplored[c->_move.index()] = false;
+		values[c->_move.index()] = c->backwardScore(logParentVisits);
+		values[c->_move.index()] += 0.0000 * heatmap.score(c->_move) / (c->backwardVisits() + 1);
 	}
 	
-	/*
-	// Try unexplored moves first
-	uint numUnexplored = 0;
-	for(uint i = 0; i < Move::numIndices; ++i) {
-		if(valid[i] && unexplored[i])
-			++numUnexplored;
-	}
-	if(numUnexplored) {
-		uint unexploredIndex = entropy(numUnexplored);
-		for(uint i = 0; i < Move::numIndices; ++i)
-			if(valid[i] && unexplored[i] && unexploredIndex-- == 0)
-				return child(Move::fromIndex(i));
-	}
-	
-	// Try explored children
-	assert(_child);
-	TreeNode* best = _child;
-	const float logParentVisits = log(this->visits() + 1);
-	float bestValue = 0.0;
-	for(TreeNode* c = _child; c; c = c->_sibling) {
-		float uctValue = c->utcValue(logParentVisits);
-		if(uctValue > bestValue) {
-			best = c;
-			bestValue = uctValue;
-		}
-	}
-	return best;
-	*/
-	
-<<<<<<< HEAD
-	/*
-=======
-		values[c->_move.index()] = c->raveScore(logParentVisits);
-	}
-	
-	// UCT select node
->>>>>>> heatmap
-=======
->>>>>>> rave
+	// maxarg select node
 	uint selectedIndex = 0;
 	float bestValue = 0.0;
 	for(uint i = 0; i < Move::numIndices; ++i) {
@@ -1350,16 +1196,9 @@ TreeNode* TreeNode::select(const Board& board)
 			bestValue = values[i];
 		}
 	}
-<<<<<<< HEAD
+	assert(valid[selectedIndex]);
 	Move selectedMove = Move::fromIndex(selectedIndex);
-	return child(selectedIndex + 1);
-<<<<<<< HEAD
-	*/
-=======
-	return child(Move::fromIndex(selectedIndex));
->>>>>>> heatmap
-=======
->>>>>>> rave
+	return child(selectedMove);
 }
 
 void TreeNode::loadGames(const string& filename)
@@ -1403,11 +1242,13 @@ void TreeNode::loadGames(const string& filename)
 void TreeNode::selectAction(Board board)
 {
 	TreeNode* current = this;
+	uint depth = 0;
 	
 	// Select
 	while(!current->isLeaf()) {
 		current = current->select(board);
 		board.playMove(current->_move);
+		++depth;
 	}
 	
 	// Expand
@@ -1415,6 +1256,7 @@ void TreeNode::selectAction(Board board)
 	
 	// Roll out
 	current->rollOut(board);
+	// cerr << depth << " ";
 }
 
 Move TreeNode::bestMove() const
@@ -1428,22 +1270,6 @@ Move TreeNode::bestMove() const
 	return best->_move;
 }
 
-<<<<<<< HEAD
-float TreeNode::rollOut(Board board) const
-{
-	board.bambooBridges();
-	board.randomFillUp();
-	
-	// 0, ½ or 1 point
-	uint winner = board.winner();
-	if(winner == 0)
-		return 0.5;
-	if(winner == board.player())
-		return 1.0;
-	else
-		return 0.0;
-<<<<<<< HEAD
-=======
 void TreeNode::rollOut(const Board& board)
 {
 	Board fillOut(board);
@@ -1463,9 +1289,9 @@ void TreeNode::rollOut(const Board& board)
 	
 	// Update HeatMap
 	if(winner == 1)
-		HeatMap::white.add(fillOut.white());
+		HistoryHeuristic::white.add(fillOut.white());
 	if(winner == 2)
-		HeatMap::black.add(fillOut.black());
+		HistoryHeuristic::black.add(fillOut.black());
 	
 	// Estimate depth
 	if(winner == 1) {
@@ -1484,48 +1310,18 @@ void TreeNode::rollOut(const Board& board)
 		backwardRecurse(fillOut, 0.5);
 	else
 		backwardRecurse(fillOut, (winner == board.player()) ? 1.0 : 0.0);
->>>>>>> heatmap
-=======
-	
-	/// @todo discount for depth
-	
-	/// @todo Killer RAVE
-	
->>>>>>> rave
 }
 
 void TreeNode::scaleStatistics(uint factor)
 {
-<<<<<<< HEAD
-
 	_backwardVisits /= factor;
 	_backwardValue /= factor;
 	_forwardVisits /= factor;
 	_forwardValue /= factor;
-=======
-	_visits /= factor;
-	   _uctValue /= factor;
->>>>>>> rave
 	for(TreeNode* c = _child; c; c = c->_sibling)
 		c->scaleStatistics(factor);
 }
 
-<<<<<<< HEAD
-=======
-void TreeNode::updateStats(float value)
-{
-	++_visits;
-	   _uctValue += value;
-}
-
-void TreeNode::updateStatsUpwards(float value)
-{
-	updateStats(value);
-	if(_parent)
-		_parent->updateStatsUpwards(1.0 - value);
-}
-
->>>>>>> rave
 class GameInputOutput {
 public:
 	GameInputOutput();
@@ -1596,8 +1392,8 @@ Move GameInputOutput::generateMove()
 	assert(_current);
 	
 	// Scale HeatMap down so new entries are valued more
-	HeatMap::black.scale(10);
-	HeatMap::white.scale(10);
+	HistoryHeuristic::black.scale(HistoryHeuristicDecay);
+	HistoryHeuristic::white.scale(HistoryHeuristicDecay);
 	
 	// Reset depth estimator
 	DepthEstimator::instance.reset();
@@ -1658,15 +1454,19 @@ void ponder(const string& filename)
 int main(int argc, char* argv[])
 {
 	cerr << "R " << argv[0]  << endl;
-	cerr << "RAND_MAX = " << RAND_MAX << endl;
-	cerr << "sizeof(float) = " << sizeof(float) << endl;
-	cerr << "sizeof(uint) = " << sizeof(uint) << endl;
-	cerr << "sizeof(void*) = " << sizeof(void*) << endl;
-	cerr << "sizeof(BoardPoint) = " << sizeof(BoardPoint) << endl;
-	cerr << "sizeof(Move) = " << sizeof(Move) << endl;
-	cerr << "sizeof(BoardMask) = " << sizeof(BoardMask) << endl;
-	cerr << "sizeof(Board) = " << sizeof(Board) << endl;
-	cerr << "sizeof(TreeNode) = " << sizeof(TreeNode) << endl;
+	trace(RAND_MAX);
+	trace(sizeof(float));
+	trace(sizeof(uint));
+	trace(sizeof(void*));
+	trace(sizeof(BoardPoint));
+	trace(sizeof(Move));
+	trace(sizeof(BoardMask));
+	trace(sizeof(Board));
+	trace(sizeof(TreeNode));
+	trace(HistoryHeuristicDecay);
+	trace(HistoryHeuristicCoefficient);
+	trace(ExplorationCoefficient);
+	trace(ThinkTime);
 	srand(time(0));
 	
 	// convertGames("competitions-sym.txt", "games.bin");
@@ -1681,4 +1481,3 @@ int main(int argc, char* argv[])
 	cerr << "Exit" << endl;
 	return 0;
 }
-
