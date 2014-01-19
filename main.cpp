@@ -98,9 +98,9 @@ protected:
 
 // Most games last 30-60 moves -> average 20 moves per player out of max 53
 #ifdef LOCAL
-Timer Timer::instance(14, 30, 53);
+Timer Timer::instance(14, 25, 53);
 #else
-Timer Timer::instance(35, 30, 53);
+Timer Timer::instance(35, 25, 53);
 #endif
 
 Timer::Timer(uint timeLimit, uint expectedRounds,  uint maxRounds)
