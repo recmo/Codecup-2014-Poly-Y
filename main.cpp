@@ -594,7 +594,7 @@ public:
 	static constexpr float explorationParameter = sqrt(2.0);
 	static uint numNodes() { return _numNodes; }
 	
-	TreeNode(): TreeNode(nullptr, Move()) {}
+	TreeNode();
 	TreeNode(TreeNode* parent, Move move);
 	~TreeNode();
 	
@@ -645,6 +645,17 @@ protected:
 };
 
 uint TreeNode::_numNodes = 0;
+
+TreeNode::TreeNode()
+: _move()
+, _visits(0)
+, _totalValue(0.0f)
+, _parent(nullptr)
+, _child(nullptr)
+, _sibling(nullptr)
+{
+	_numNodes++;
+}
 
 TreeNode::TreeNode(TreeNode* parent, Move move)
 : _move(move)
