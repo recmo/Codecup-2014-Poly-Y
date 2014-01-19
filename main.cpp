@@ -8,14 +8,14 @@
 #include <sstream>
 #include <cmath>
 #include <random>
-#include <chrono>
+#include <time.h>
 using namespace std;
-using namespace std::chrono;
 typedef unsigned int uint;
 typedef unsigned char uint8;
 typedef uint32_t uint32;
 typedef uint64_t uint64;
 typedef signed int sint;
+#define trace(exp) cerr << "Trace: " << #exp << " = " << (exp) << endl;
 
 bool debug = false;
 
@@ -90,7 +90,7 @@ protected:
 	uint _timeLimit;
 	uint _maxRounds;
 	uint _roundLimit;
-	steady_clock::time_point _roundStart;
+	clock_t _roundStart;
 };
 
 Timer Timer::instance(35, 53);
@@ -98,19 +98,20 @@ Timer Timer::instance(35, 53);
 Timer::Timer(uint timeLimit, uint maxRounds)
 : _timeLimit(timeLimit)
 , _maxRounds(maxRounds)
-, _roundLimit((_timeLimit * 1000000) / _maxRounds)
+, _roundLimit((_timeLimit * 1000) / _maxRounds)
+, _roundStart()
 {
 }
 
 void Timer::nextRound()
 {
-	_roundStart = steady_clock::now();
+	_roundStart = clock();
 }
 
 bool Timer::ponder()
 {
-	steady_clock::time_point now = steady_clock::now();
-	uint duration = duration_cast<microseconds>(now - _roundStart).count();
+	clock_t now = clock();
+	uint duration = (1000 * (now - _roundStart)) / CLOCKS_PER_SEC;
 	return duration < _roundLimit;
 }
 
@@ -1188,9 +1189,10 @@ void ponder(const string& filename)
 int main(int argc, char* argv[])
 {
 	cerr << "R " << argv[0]  << endl;
-	cerr << "sizeof(float) = " << sizeof(float) << endl;
-	cerr << "sizeof(uint) = " << sizeof(uint) << endl;
-	cerr << "sizeof(void*) = " << sizeof(void*) << endl;
+	trace(CLOCKS_PER_SEC);
+	trace(sizeof(float));
+	trace(sizeof(uint));
+	trace(sizeof(void*));
 	cerr << "sizeof(BoardPoint) = " << sizeof(BoardPoint) << endl;
 	cerr << "sizeof(Move) = " << sizeof(Move) << endl;
 	cerr << "sizeof(BoardMask) = " << sizeof(BoardMask) << endl;
