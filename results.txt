@@ -1,0 +1,140 @@
+
+Ranking order             Modified    Type  Score
+-------------------------------------------------
+ 1  polio-50k            (1388102707)   R    200
+ 2  polio-games          (1388100887)   R    187
+ 3  back-propagate       (1381588953)   R    180
+ 4  polio-empty          (1388100883)   R    177
+ 5  polio-itterated      (1388100893)   R    173
+ 6  polio3               (1381574113)   R    172
+ 7  polio-25k            (1388102602)   R    171
+
+
+One rollout per select, 50k select:
+
+Ranking order             Modified    Type  Score
+-------------------------------------------------
+ 1  polio-50k            (1388102707)   R    230
+ 2  polio-50k2           (1388166103)   R    228
+ 3  polio-games          (1388100887)   R    217
+ 4  back-propagate       (1381588953)   R    207
+ 5  polio-empty          (1388100883)   R    204
+ 6  polio-itterated      (1388100893)   R    202
+ 7  polio3               (1381574113)   R    196
+ 8  polio-25k            (1388102602)   R    196
+
+
+After simplifying rollout:
+
+Ranking order             Modified    Type  Score
+-------------------------------------------------
+ 1  polio-50k2           (1388173026)   R     94
+ 2  polio-50k            (1388102707)   R     94
+ 3  back-propagate       (1381588953)   R     87
+ 4  polio-games          (1388100887)   R     85
+
+
+After introducing the entropy function:
+
+Ranking order             Modified    Type  Score
+-------------------------------------------------
+ 1  polio-50k            (1388102707)   R     96
+ 2  polio-50k2           (1388176691)   R     91
+ 3  back-propagate       (1381588953)   R     90
+ 4  polio-games          (1388100887)   R     83
+
+
+After finetuning entropy source:
+
+Ranking order             Modified    Type  Score
+-------------------------------------------------
+ 1  polio-50k            (1388102707)   R    104
+ 2  back-propagate       (1381588953)   R     96
+ 3  polio-games          (1388100887)   R     94
+ 4  polio-50k2           (1388183108)   R     66
+
+
+Disable entropy (return rand()%upperBound):
+
+Ranking order             Modified    Type  Score
+-------------------------------------------------
+ 1  polio-50k            (1388102707)   R    104
+ 2  back-propagate       (1381588953)   R     98
+ 3  polio-games          (1388100887)   R     87
+ 4  polio-50k2           (1388213572)   R     71
+
+
+Disable blackOrWhite
+
+Ranking order             Modified    Type  Score
+-------------------------------------------------
+ 1  polio-50k            (1388102707)   R     97
+ 2  back-propagate       (1381588953)   R     90
+ 3  polio-50k2           (1388217093)   R     87
+ 4  polio-games          (1388100887)   R     86
+
+
+Full on 50k3
+
+Ranking order             Modified    Type  Score
+-------------------------------------------------
+ 1  polio-50k            (1388102707)   R    130
+ 2  polio-50k3           (1388224187)   R    122
+ 3  polio-games          (1388100887)   R    117
+ 4  back-propagate       (1381588953)   R    116
+ 5  polio-50k2           (1388217093)   R    115
+
+50k2 == 50k, added heatmap based variant of 50k3
+
+Ranking order             Modified    Type  Score
+-------------------------------------------------
+ 1  polio-50k            (1388102707)   R    159
+ 2  polio-50k2           (1388229892)   R    156
+ 3  polio-heatmap        (1388231055)   R    148
+ 4  polio-50k3           (1388224187)   R    146
+ 5  polio-games          (1388100887)   R    146
+ 6  back-propagate       (1381588953)   R    145
+
+poilio-entrop: heatmap with "return rand() % upperBound"
+
+Ranking order             Modified    Type  Score
+-------------------------------------------------
+ 1  polio-50k            (1388102707)   R    192
+ 2  polio-entrop         (1388239024)   R    185
+ 3  polio-50k2           (1388229892)   R    184
+ 4  back-propagate       (1381588953)   R    178
+ 5  polio-heatmap        (1388231055)   R    176
+ 6  polio-50k3           (1388224187)   R    175
+ 7  polio-games          (1388100887)   R    170
+
+poilio-entrop: heatmap with "mt19937_64"
+
+
+Ranking order             Modified    Type  Score
+-------------------------------------------------
+ 1  polio-50k            (1388102707)   R    191
+ 2  polio-entrop         (1388251941)   R    185
+ 3  polio-50k2           (1388229892)   R    185
+ 4  polio-heatmap        (1388231055)   R    176
+ 5  polio-games          (1388100887)   R    176
+ 6  polio-50k3           (1388224187)   R    175
+ 7  back-propagate       (1381588953)   R    172
+
+
+Ranking order             Modified    Type  Score
+-------------------------------------------------
+ 1  forward-propagate    (1388271411)   R    454
+ 2  back-propagate       (1388271402)   R    437
+ 3  polio-games          (1388271420)   R    432
+ 4  polio-50k            (1388271397)   R    432
+ 5  polio-32s            (1388271378)   R    410
+ 6  polio-16s            (1388271365)   R    396
+ 7  polio-8s             (1388271346)   R    364
+ 8  player3              (1388270981)   R    338
+ 9  polio-4s             (1388271338)   R    328
+10  polio-2s             (1388271328)   R    302
+11  polio-1s             (1388271306)   R    282
+12  player2              (1388270981)   R    265
+13  player1              (1388270981)   R    240
+
+
