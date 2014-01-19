@@ -767,7 +767,7 @@ void TreeNode::write(ostream& out, uint treshold) const
 void TreeNode::read(const string& filename, uint rotation)
 {
 	cerr << "Reading " << filename << endl;
-	if(rotation == -1) {
+	if(rotation == uint(-1)) {
 		for(rotation = 0; rotation < Move::maxRotation; ++rotation)
 			read(filename, rotation);
 		return;
