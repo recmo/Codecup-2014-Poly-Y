@@ -8,7 +8,9 @@
 #include <sstream>
 #include <cmath>
 #include <random>
+#include <chrono>
 using namespace std;
+using namespace std::chrono;
 typedef unsigned int uint;
 typedef unsigned char uint8;
 typedef uint32_t uint32;
@@ -73,6 +75,43 @@ bool blackOrWhite(uint numBlack, uint numWhite)
 inline float randomReal()
 {
 	return static_cast<float>(entropy(1000)) / 1000.0;
+}
+
+class Timer {
+public:
+	static Timer instance;
+	Timer(uint timeLimit, uint maxRounds);
+	~Timer() { }
+	
+	void nextRound();
+	bool ponder();
+	
+protected:
+	uint _timeLimit;
+	uint _maxRounds;
+	uint _roundLimit;
+	steady_clock::time_point _roundStart;
+};
+
+Timer Timer::instance(35, 53);
+
+Timer::Timer(uint timeLimit, uint maxRounds)
+: _timeLimit(timeLimit)
+, _maxRounds(maxRounds)
+, _roundLimit((_timeLimit * 1000000) / _maxRounds)
+{
+}
+
+void Timer::nextRound()
+{
+	_roundStart = steady_clock::now();
+}
+
+bool Timer::ponder()
+{
+	steady_clock::time_point now = steady_clock::now();
+	uint duration = duration_cast<microseconds>(now - _roundStart).count();
+	return duration < _roundLimit;
 }
 
 class BoardPoint;
@@ -1098,8 +1137,12 @@ Move GameInputOutput::generateMove()
 	cerr << TreeNode::numNodes()  << " nodes (" << _current->visits() << " visits)" << " (";
 	cerr << (TreeNode::numNodes() * sizeof(TreeNode) / (1024*1024))  << " MB)" << endl;
 	assert(_current);
-	for(uint i = 0; i < 50000; ++i)
-		_current->selectAction(_board);
+	
+	Timer::instance.nextRound();
+	while(Timer::instance.ponder()) {
+		for(uint i = 0; i < 500; ++i)
+			_current->selectAction(_board);
+	}
 	cerr << "Thought to ";
 	cerr << TreeNode::numNodes()  << " nodes (" << _current->visits() << " visits)" << " (";
 	cerr << (TreeNode::numNodes() * sizeof(TreeNode) / (1024*1024))  << " MB)" << endl;
