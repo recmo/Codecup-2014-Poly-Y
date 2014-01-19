@@ -38,6 +38,11 @@ inline float randomReal()
 uint32 entropy(uint upperBound)
 {
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+	return rand() % upperBound;
+	
+>>>>>>> rave
 	static uint32 entropy = rand();
 	static uint32 used = 0x00FFFFFF;
 	
@@ -857,10 +862,19 @@ public:
 	
 	Move move() const { return _move; }
 <<<<<<< HEAD
+<<<<<<< HEAD
 	float visits() const { return _visits; }
 	float totalValue() const { return _totalValue; }
 	float utcValue() const { return utcValue(log(_parent->visits() + 1)); }
 	float utcValue(float logParentVisits) const;
+=======
+	float uctValue() const { return uctValue(log(_parent->visits() + 1)); }
+	float uctValue(float logParentVisits) const;
+	float amafValue(float logParentVisits) const;
+	float alphaAmafValue(float alpha, float logParentVisits) const;
+	float raveAlpha() const;
+	float raveValue(float logParentVisits) const { return alphaAmafValue(raveAlpha(), logParentVisits); }
+>>>>>>> rave
 	
 	TreeNode* child(Move move);
 	
@@ -918,10 +932,17 @@ protected:
 	static uint _numNodes;
 	
 	Move _move;
+<<<<<<< HEAD
 	uint _backwardVisits;
 	float _backwardValue;
 	uint _forwardVisits;
 	float _forwardValue;
+=======
+	uint _visits;
+	float _uctValue;
+	uint _amafMatches;
+	float _amafValue;
+>>>>>>> rave
 	TreeNode* _parent;
 	TreeNode* _child;
 	TreeNode* _sibling;
@@ -932,10 +953,15 @@ uint TreeNode::_numNodes = 0;
 
 TreeNode::TreeNode(TreeNode* parent, Move move)
 : _move(move)
+<<<<<<< HEAD
 , _backwardVisits(0)
 , _backwardValue(0.0)
 , _forwardVisits(0)
 , _forwardValue(0.0)
+=======
+, _visits(0)
+, _uctValue(0.0f)
+>>>>>>> rave
 , _parent(parent)
 , _child(nullptr)
 , _sibling(nullptr)
@@ -952,6 +978,7 @@ TreeNode::~TreeNode()
 	_numNodes--;
 }
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 inline float TreeNode::utcValue(float logParentVisits) const
 {
@@ -994,6 +1021,29 @@ float TreeNode::raveScore(float logParentVisits) const
 {
 	return alphaAmafScore(logParentVisits, raveAlpha());
 >>>>>>> heatmap
+=======
+inline float TreeNode::uctValue(float logParentVisits) const
+{
+	return _uctValue / _visits  + explorationParameter * sqrt(logParentVisits / _visits);
+}
+
+inline float TreeNode::amafValue(float logParentVisits) const
+{
+	return _amafValue / _amafMatches + explorationParameter * sqrt(logParentVisits / _amafMatches);
+}
+
+inline float TreeNode::alphaAmafValue(float alpha, float logParentVisits) const
+{
+	return alpha * amafValue(logParentVisits) + (1.0 - alpha) * uctValue(logParentVisits);
+}
+
+inline float TreeNode::raveAlpha() const
+{
+	if(_visits >= 5000)
+		return 0.0;
+	float parameter = 5000;
+	return (parameter - _visits) / parameter;
+>>>>>>> rave
 }
 
 TreeNode* TreeNode::child(Move move)
@@ -1059,6 +1109,7 @@ void TreeNode::vincent(TreeNode* child)
 
 void TreeNode::backwardRecurse(const Board& endGame, float value)
 {
+<<<<<<< HEAD
 	backwardUpdate(value);
 	if(_parent)
 		_parent->backwardRecurse(endGame, 1.0 - value);
@@ -1102,6 +1153,12 @@ void TreeNode::forwardUpdate(float score)
 {
 	++_forwardVisits;
 	_forwardValue += score;
+=======
+	out << treeNode.visits() << " " << treeNode._uctValue << " " << treeNode.depth();
+	for(const TreeNode* p = &treeNode; p; p = p->_parent)
+		out << " " << p->_move;
+	return out;
+>>>>>>> rave
 }
 
 void TreeNode::writeOut(ostream& out, uint treshold) const
@@ -1136,10 +1193,15 @@ void TreeNode::write(ostream& out, uint treshold) const
 	
 	// Write out this node
 	out.put(_move.index());
+<<<<<<< HEAD
 	out.write(reinterpret_cast<const char*>(&_backwardVisits), sizeof(_backwardVisits));
 	out.write(reinterpret_cast<const char*>(&_backwardValue), sizeof(_backwardValue));
 	out.write(reinterpret_cast<const char*>(&_forwardVisits), sizeof(_forwardVisits));
 	out.write(reinterpret_cast<const char*>(&_forwardValue), sizeof(_forwardValue));
+=======
+	out.write(reinterpret_cast<const char*>(&_visits), sizeof(_visits));
+	out.write(reinterpret_cast<const char*>(&_uctValue), sizeof(_uctValue));
+>>>>>>> rave
 	out.put(numTresholdChildren);
 	
 	// Write out child nodes
@@ -1173,12 +1235,17 @@ void TreeNode::read(istream& in, uint rotation)
 	float value;
 	in.read(reinterpret_cast<char*>(&visits), sizeof(visits));
 	in.read(reinterpret_cast<char*>(&value), sizeof(value));
+<<<<<<< HEAD
 	_forwardVisits += visits;
 	_forwardValue += value;
 	in.read(reinterpret_cast<char*>(&visits), sizeof(visits));
 	in.read(reinterpret_cast<char*>(&value), sizeof(value));
 	_backwardVisits += visits;
 	_backwardValue += value;
+=======
+	_visits += visits;
+	   _uctValue += value;
+>>>>>>> rave
 	
 	// Read child nodes
 	uint numChildren = in.get();
@@ -1234,6 +1301,7 @@ TreeNode* TreeNode::select(const Board& board)
 		unexplored[c->_move.index()] = false;
 	}
 	
+	/*
 	// Try unexplored moves first
 	uint numUnexplored = 0;
 	for(uint i = 0; i < Move::numIndices; ++i) {
@@ -1260,7 +1328,9 @@ TreeNode* TreeNode::select(const Board& board)
 		}
 	}
 	return best;
+	*/
 	
+<<<<<<< HEAD
 	/*
 =======
 		values[c->_move.index()] = c->raveScore(logParentVisits);
@@ -1268,10 +1338,12 @@ TreeNode* TreeNode::select(const Board& board)
 	
 	// UCT select node
 >>>>>>> heatmap
+=======
+>>>>>>> rave
 	uint selectedIndex = 0;
 	float bestValue = 0.0;
 	for(uint i = 0; i < Move::numIndices; ++i) {
-		if(!valid[i] || unexplored[i])
+		if(!valid[i])
 			continue;
 		if(values[i] > bestValue || (values[i] == bestValue && entropy(1))) {
 			selectedIndex = i;
@@ -1281,10 +1353,13 @@ TreeNode* TreeNode::select(const Board& board)
 <<<<<<< HEAD
 	Move selectedMove = Move::fromIndex(selectedIndex);
 	return child(selectedIndex + 1);
+<<<<<<< HEAD
 	*/
 =======
 	return child(Move::fromIndex(selectedIndex));
 >>>>>>> heatmap
+=======
+>>>>>>> rave
 }
 
 void TreeNode::loadGames(const string& filename)
@@ -1367,6 +1442,7 @@ float TreeNode::rollOut(Board board) const
 		return 1.0;
 	else
 		return 0.0;
+<<<<<<< HEAD
 =======
 void TreeNode::rollOut(const Board& board)
 {
@@ -1409,19 +1485,47 @@ void TreeNode::rollOut(const Board& board)
 	else
 		backwardRecurse(fillOut, (winner == board.player()) ? 1.0 : 0.0);
 >>>>>>> heatmap
+=======
+	
+	/// @todo discount for depth
+	
+	/// @todo Killer RAVE
+	
+>>>>>>> rave
 }
 
 void TreeNode::scaleStatistics(uint factor)
 {
+<<<<<<< HEAD
 
 	_backwardVisits /= factor;
 	_backwardValue /= factor;
 	_forwardVisits /= factor;
 	_forwardValue /= factor;
+=======
+	_visits /= factor;
+	   _uctValue /= factor;
+>>>>>>> rave
 	for(TreeNode* c = _child; c; c = c->_sibling)
 		c->scaleStatistics(factor);
 }
 
+<<<<<<< HEAD
+=======
+void TreeNode::updateStats(float value)
+{
+	++_visits;
+	   _uctValue += value;
+}
+
+void TreeNode::updateStatsUpwards(float value)
+{
+	updateStats(value);
+	if(_parent)
+		_parent->updateStatsUpwards(1.0 - value);
+}
+
+>>>>>>> rave
 class GameInputOutput {
 public:
 	GameInputOutput();
@@ -1490,10 +1594,6 @@ Move GameInputOutput::generateMove()
 	cerr << TreeNode::numNodes()  << " nodes (" << _current->backwardVisits() << " visits)" << " (";
 	cerr << (TreeNode::numNodes() * sizeof(TreeNode) / (1024*1024))  << " MB)" << endl;
 	assert(_current);
-<<<<<<< HEAD
-	for(uint i = 0; i < 50000; ++i)
-		_current->selectAction(_board);
-=======
 	
 	// Scale HeatMap down so new entries are valued more
 	HeatMap::black.scale(10);
@@ -1514,7 +1614,6 @@ Move GameInputOutput::generateMove()
 	cerr << "Current depth " << _board.moveCount() << endl;
 	cerr << "Estimated total depth " << DepthEstimator::instance.estimate() << endl;
 	
->>>>>>> heatmap
 	cerr << "Thought to ";
 	cerr << TreeNode::numNodes()  << " nodes (" << _current->backwardVisits() << " visits)" << " (";
 	cerr << (TreeNode::numNodes() * sizeof(TreeNode) / (1024*1024))  << " MB)" << endl;
