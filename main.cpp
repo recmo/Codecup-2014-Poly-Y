@@ -7,9 +7,11 @@
 #include <cstdlib>
 #include <sstream>
 #include <cmath>
+#include <random>
 using namespace std;
 typedef unsigned int uint;
 typedef unsigned char uint8;
+typedef uint32_t uint32;
 typedef uint64_t uint64;
 typedef signed int sint;
 
@@ -25,9 +27,52 @@ inline uint trailingZeros(uint64 n)
 	return __builtin_ctzll(n);
 }
 
+uint32 entropy(uint upperBound)
+{
+	static std::mt19937_64 engine(time(0));
+	const static uint64 full = (engine.max() - engine.min()) >> 8; // 8 bit safety margin
+	static uint64 entropy = 0;
+	static uint64 available = 0;
+	
+	// Fill entropy pool
+	if(available < upperBound) {
+		entropy = engine() - engine.min();
+		available = full;
+	}
+	
+	// Take entropy out
+	uint dice = entropy % upperBound;
+	entropy /= upperBound;
+	available /= upperBound;
+	return dice;
+}
+
+// true = white
+bool blackOrWhite(uint numBlack, uint numWhite)
+{
+	// Short cut if there is no entropy involved
+	if(numBlack == 0)
+		return true;
+	if(numWhite == 0)
+		return false;
+	
+	// We can divide out gcd(numBlack, numWhite) , let's only do it for powers of two
+	//uint ctz = trailingZeros(numBlack | numWhite);
+	//numBlack >>= ctz;
+	//numWhite >>= ctz;
+	uint orred = numBlack | numWhite;
+	while((orred & 1) == 0) {
+		orred >>= 1;
+		numBlack >>= 1;
+		numWhite >>= 1;
+	}
+	
+	return entropy(numBlack + numWhite) < numWhite;
+}
+
 inline float randomReal()
 {
-	return static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+	return static_cast<float>(entropy(1000)) / 1000.0;
 }
 
 class BoardPoint;
@@ -412,7 +457,7 @@ BoardPoint BoardMask::randomPoint() const
 	uint p = popcount();
 	if(p == 0)
 		return BoardPoint();
-	uint n = rand() % p;
+	uint n = entropy(p);
 	Itterator i(*this);
 	while(n--)
 		i++;
@@ -525,7 +570,7 @@ void Board::bambooBridges()
 		BoardMask* player = nullptr;
 		BoardMask* opponent = nullptr;
 		vector<BoardMask>* self = nullptr;
-		if(whiteIndex != whiteGroups.size() && (blackIndex == blackGroups.size() || (rand() % 2))) {
+		if(whiteIndex != whiteGroups.size() && (blackIndex == blackGroups.size() || entropy(2))) {
 			i = whiteIndex++;
 			group = whiteGroups[i];
 			player = &_white;
@@ -575,7 +620,7 @@ void Board::randomFillUp()
 	
 	// Fill up with equal amounts of stones
 	for(auto i = free.itterator(); i; i++) {
-		uint dice = rand() % (blackStones + whiteStones);
+		uint dice = entropy(blackStones + whiteStones);
 		if(dice < whiteStones) {
 			_white.set(*i);
 			whiteStones--;
