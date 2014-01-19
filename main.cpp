@@ -842,6 +842,7 @@ public:
 	uint numVisitedChildren() const;
 	BoardMask visitedChildren() const;
 	TreeNode* top() const;
+	bool isLeaf() const { return !_child; }
 	TreeNode* child(Move move);
 	
 	void vincent(TreeNode* child); ///< Favorite child, forget all other children
@@ -862,8 +863,7 @@ public:
 	void forwardUpdate(float score);
 	
 	void selectAction(Board board);
-	bool isLeaf() { return !_child; }
-	   void rollOut(const Board& board);
+   void rollOut(const Board& board);
 	
 	Move bestMove() const;
 	
@@ -1225,16 +1225,17 @@ void TreeNode::loadGames(const string& filename)
 void TreeNode::selectAction(Board board)
 {
 	TreeNode* current = this;
+	
+	// Select
 	while(!current->isLeaf()) {
 		current = current->select(board);
 		board.playMove(current->_move);
 	}
-	if(!current->isLeaf()) {
-		TreeNode* newNode = current->select(board);
-		assert(newNode);
-		current = newNode;
-		board.playMove(current->_move);
-	}
+	
+	// Expand
+	current = current->select(board);
+	
+	// Roll out
 	current->rollOut(board);
 }
 
@@ -1265,8 +1266,6 @@ void TreeNode::rollOut(const Board& board)
 		if(winningSet)
 			winner = 2; // black won
 	}
-	
-	// No winner
 	
 	// Update HeatMap
 	if(winner == 1)
@@ -1441,7 +1440,7 @@ int main(int argc, char* argv[])
 	cerr << "sizeof(uint) = " << sizeof(uint) << endl;
 	cerr << "sizeof(void*) = " << sizeof(void*) << endl;
 	cerr << "sizeof(BoardPoint) = " << sizeof(BoardPoint) << endl;
-	cerr << "sizeof(Mov e) = " << sizeof(Move) << endl;
+	cerr << "sizeof(Move) = " << sizeof(Move) << endl;
 	cerr << "sizeof(BoardMask) = " << sizeof(BoardMask) << endl;
 	cerr << "sizeof(Board) = " << sizeof(Board) << endl;
 	cerr << "sizeof(TreeNode) = " << sizeof(TreeNode) << endl;
@@ -1459,3 +1458,4 @@ int main(int argc, char* argv[])
 	cerr << "Exit" << endl;
 	return 0;
 }
+
