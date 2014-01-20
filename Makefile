@@ -5,3 +5,5 @@ polio: main.cpp
 competition: polio
 	cd caia/bin; ./caiaio -m competition
 
+bin2c: bin2c.cpp
+	g++ -std=c++11 -DLOCAL -O2 -g $^ -o $@ -Wall -Wextra -Wno-unused-parameter -Werror=return-type -Werror=switch -lm
