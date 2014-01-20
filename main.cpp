@@ -224,7 +224,7 @@ Move::Move(const string& str)
 
 class BoardMask {
 public:
-	class Itterator;
+	class Iterator;
 	const static BoardMask fullBoard;
 	const static BoardMask borders[5];
 	
@@ -258,7 +258,7 @@ public:
 	bool isValid() const { return operator==(*this & fullBoard); }
 	BoardPoint firstPoint() const;
 	BoardPoint randomPoint() const;
-	Itterator itterator() const;
+	Iterator iterator() const;
 	
 	uint64 a() const { return _a; }
 	uint64 b() const { return _b; }
@@ -271,13 +271,13 @@ protected:
 	uint64 _b;
 };
 
-class BoardMask::Itterator {
+class BoardMask::Iterator {
 public:
-	Itterator(const BoardMask& mask): _mask(mask), _point(_mask.firstPoint()) { }
-	~Itterator() { }
+	Iterator(const BoardMask& mask): _mask(mask), _point(_mask.firstPoint()) { }
+	~Iterator() { }
 	operator bool() const { return _mask._a | _mask._b; }
-	Itterator& operator++() { _mask.clear(_point); _point = _mask.firstPoint(); return *this; }
-	Itterator operator++(int) { Itterator tmp(*this); operator++(); return tmp; }
+	Iterator& operator++() { _mask.clear(_point); _point = _mask.firstPoint(); return *this; }
+	Iterator operator++(int) { Iterator tmp(*this); operator++(); return tmp; }
 	const BoardPoint& operator*() const { return _point; }
 	const BoardPoint* operator->() const { return &_point; }
 	
@@ -429,15 +429,15 @@ inline BoardMask::BoardMask(BoardPoint point)
 {
 }
 
-inline BoardMask::Itterator BoardMask::itterator() const
+inline BoardMask::Iterator BoardMask::iterator() const
 {
-	return Itterator(*this);
+	return Iterator(*this);
 }
 
 BoardMask BoardMask::expanded() const
 {
 	BoardMask result(*this);
-	for(Itterator i(*this); i; ++i)
+	for(Iterator i(*this); i; ++i)
 		result |= i->neighbors();
 	return result;
 }
@@ -449,7 +449,7 @@ BoardMask BoardMask::connected(const BoardMask& seed) const
 	BoardMask border = result;
 	while(border) {
 		BoardMask nextBorder;
-		for(auto i = border.itterator(); i; ++i)
+		for(auto i = border.iterator(); i; ++i)
 			nextBorder |= i->neighbors() & *this;
 		nextBorder -= result;
 		result |= nextBorder;
@@ -511,7 +511,7 @@ BoardPoint BoardMask::randomPoint() const
 	if(p == 0)
 		return BoardPoint();
 	uint n = entropy(p);
-	Itterator i(*this);
+	Iterator i(*this);
 	while(n--)
 		i++;
 	return *i;
@@ -672,7 +672,7 @@ void Board::randomFillUp()
 	uint blackStones = 53 - _white.popcount();
 	
 	// Fill up with equal amounts of stones
-	for(auto i = free.itterator(); i; i++) {
+	for(auto i = free.iterator(); i; i++) {
 		if(blackOrWhite(blackStones, whiteStones)) {
 			_white.set(*i);
 			whiteStones--;
@@ -716,15 +716,15 @@ public:
 	void writeOut(ostream& out, uint depth) const;
 	
 	void scaleStatistics(uint factor);
-	void updateStatsUpwards(float value);
-	void updateStats(float value);
+	void updateStatsUpwards(float score);
+	void updateStats(float score);
 	
 	void selectAction(Board board);
 	bool isLeaf() { return _visits == 0; }
 	float rollOut(const Board& board) const;
 	
 	float visits() const { return _visits; }
-	float totalValue() const { return _totalValue; }
+	float totalScore() const { return _totalScore; }
 	
 	Move bestMove() const;
 	
@@ -734,7 +734,7 @@ protected:
 	
 	Move _move;
 	uint _visits;
-	float _totalValue;
+	float _totalScore;
 	TreeNode* _parent;
 	TreeNode* _child;
 	TreeNode* _sibling;
@@ -746,7 +746,7 @@ uint TreeNode::_numNodes = 0;
 TreeNode::TreeNode()
 : _move()
 , _visits(0)
-, _totalValue(0.0f)
+, _totalScore(0.0f)
 , _parent(nullptr)
 , _child(nullptr)
 , _sibling(nullptr)
@@ -757,7 +757,7 @@ TreeNode::TreeNode()
 TreeNode::TreeNode(TreeNode* parent, Move move)
 : _move(move)
 , _visits(0)
-, _totalValue(0.0f)
+, _totalScore(0.0f)
 , _parent(parent)
 , _child(nullptr)
 , _sibling(nullptr)
@@ -824,7 +824,7 @@ void TreeNode::vincent(TreeNode* child)
 
 std::ostream& operator<<(std::ostream& out, const TreeNode& treeNode)
 {
-	out << treeNode.visits() << " " << treeNode._totalValue << " " << treeNode.depth();
+	out << treeNode.visits() << " " << treeNode._totalScore << " " << treeNode.depth();
 	for(const TreeNode* p = &treeNode; p; p = p->_parent)
 		out << " " << p->_move;
 	return out;
@@ -863,7 +863,7 @@ void TreeNode::write(ostream& out, uint treshold) const
 	// Write out this node
 	out.put(_move.index());
 	out.write(reinterpret_cast<const char*>(&_visits), sizeof(_visits));
-	out.write(reinterpret_cast<const char*>(&_totalValue), sizeof(_totalValue));
+	out.write(reinterpret_cast<const char*>(&_totalScore), sizeof(_totalScore));
 	out.put(numTresholdChildren);
 	
 	// Write out child nodes
@@ -894,11 +894,11 @@ void TreeNode::read(istream& in, uint rotation)
 	
 	// Read this node
 	uint visits;
-	float value;
+	float score;
 	in.read(reinterpret_cast<char*>(&visits), sizeof(visits));
-	in.read(reinterpret_cast<char*>(&value), sizeof(value));
+	in.read(reinterpret_cast<char*>(&score), sizeof(score));
 	_visits += visits;
-	_totalValue += value;
+	_totalScore += score;
 	
 	// Read child nodes
 	uint numChildren = in.get();
@@ -916,11 +916,11 @@ TreeNode* TreeNode::select(const Board& board)
 {
 	// Index over moves
 	uint visits[Move::numIndices];
-	float values[Move::numIndices];
+	float score[Move::numIndices];
 	bool valid[Move::numIndices];
 	for(uint i = 0; i < Move::numIndices; ++i) {
 		visits[i] = 0;
-		values[i] = 0.0f;
+		score[i] = 0.0f;
 		valid[i] = false;
 	}
 	
@@ -930,13 +930,13 @@ TreeNode* TreeNode::select(const Board& board)
 	
 	// Non swap moves
 	BoardMask moves = board.nonSwapMoves();
-	for(BoardMask::Itterator i = moves.itterator(); i; ++i)
+	for(BoardMask::Iterator i = moves.iterator(); i; ++i)
 		valid[i->index()] = true;
 	
 	// Load existing child data
 	for(TreeNode* c = _child; c; c = c->_sibling) {
 		visits[c->_move.index()] = c->visits();
-		values[c->_move.index()] = c->totalValue();
+		score[c->_move.index()] = c->totalScore();
 	}
 	
 	// Try existing children first
@@ -947,7 +947,7 @@ TreeNode* TreeNode::select(const Board& board)
 		if(!valid[i])
 			continue;
 		float uctValue =
-			values[i] / (visits[i] + epsilon) +
+			score[i] / (visits[i] + epsilon) +
 			explorationParameter * sqrt(logParentVisits / (visits[i] + epsilon)) +
 			randomReal() * epsilon; // small random number to break ties randomly in unexpanded nodes
 		if(uctValue > bestValue) {
@@ -1065,22 +1065,22 @@ float TreeNode::rollOut(const Board& board) const
 void TreeNode::scaleStatistics(uint factor)
 {
 	_visits /= factor;
-	_totalValue /= factor;
+	_totalScore /= factor;
 	for(TreeNode* c = _child; c; c = c->_sibling)
 		c->scaleStatistics(factor);
 }
 
-void TreeNode::updateStats(float value)
+void TreeNode::updateStats(float score)
 {
 	++_visits;
-	_totalValue += value;
+	_totalScore += score;
 }
 
-void TreeNode::updateStatsUpwards(float value)
+void TreeNode::updateStatsUpwards(float score)
 {
-	updateStats(value);
+	updateStats(score);
 	if(_parent)
-		_parent->updateStatsUpwards(1.0 - value);
+		_parent->updateStatsUpwards(1.0 - score);
 }
 
 class GameInputOutput {
@@ -1271,14 +1271,14 @@ int main(int argc, char* argv[])
 	srand(time(0));
 	
 	// convertGames("competitions.txt", "games.bin");
-	// convertGames("competitions.txt", "itterated.bin");
-	// ponder("itterated.bin");
+	// convertGames("competitions.txt", "iterated.bin");
+	// ponder("iterated.bin");
 	
-	// make && time ./polio && ls -l ./itterated.out.bin
-	// bar ./itterated.out.bin | base64 -w 0 | ./bin2c > itterated.cpp && ls -l ./itterated.cpp
+	// make && time ./polio && ls -l ./iterated.out.bin
+	// bar ./iterated.out.bin | base64 -w 0 | ./bin2c > iterated.cpp && ls -l ./iterated.cpp
 	// TreeNode tree;
-	// tree.read("itterated.bin");
-	// tree.write("itterated.out.bin", 35);
+	// tree.read("iterated.bin");
+	// tree.write("iterated.out.bin", 35);
 	// return 0;
 	
 	GameInputOutput gio;
