@@ -684,11 +684,60 @@ void Board::randomFillUp()
 	assert(whiteStones == 0 && blackStones == 0);
 }
 
+class HistoryHeuristic {
+public:
+	static HistoryHeuristic player1;
+	static HistoryHeuristic player2;
+	HistoryHeuristic();
+	
+	float heuristic(uint moveIndex) const;
+	void countWin(const BoardMask& endGame);
+	void countLoss(const BoardMask& endGame);
+	
+private:
+	static constexpr float epsilon = 1e-6;
+	float _score[Move::numIndices];
+	uint _visits[Move::numIndices];
+};
+
+HistoryHeuristic HistoryHeuristic::player1;
+HistoryHeuristic HistoryHeuristic::player2;
+
+HistoryHeuristic::HistoryHeuristic()
+: _score()
+, _visits()
+{
+	for(uint i = 0; i < Move::numIndices; ++i) {
+		_score[i] = 0.0;
+		_visits[i] = 0;
+	}
+}
+
+float HistoryHeuristic::heuristic(uint moveIndex) const
+{
+	return _score[moveIndex] / (float(_visits[moveIndex]) + epsilon);
+}
+
+void HistoryHeuristic::countLoss(const BoardMask& endGame)
+{
+	for(BoardMask::Iterator i = endGame.iterator(); i; ++i)
+		_visits[i->index()] += 1;
+}
+
+void HistoryHeuristic::countWin(const BoardMask& endGame)
+{
+	for(BoardMask::Iterator i = endGame.iterator(); i; ++i) {
+		_score[i->index()] += 1.0;
+		_visits[i->index()] += 1;
+	}
+}
+
 class TreeNode {
 public:
 	static constexpr int nActions = 5;
 	static constexpr float epsilon = 1e-6;
 	static constexpr float explorationParameter = sqrt(2.0);
+	static constexpr float historyParameter = 1.0;
 	static uint numNodes() { return _numNodes; }
 	
 	TreeNode();
@@ -939,6 +988,9 @@ TreeNode* TreeNode::select(const Board& board)
 		score[c->_move.index()] = c->totalScore();
 	}
 	
+	// Find the appropriate history heuristic
+	const HistoryHeuristic& historyHeuristic = (board.player() == 1) ? HistoryHeuristic::player1 : HistoryHeuristic::player2;
+	
 	// Try existing children first
 	uint selectedIndex = 0;
 	float bestValue = 0.0;
@@ -949,7 +1001,7 @@ TreeNode* TreeNode::select(const Board& board)
 		float uctValue =
 			score[i] / (visits[i] + epsilon) +
 			explorationParameter * sqrt(logParentVisits / (visits[i] + epsilon)) +
-			randomReal() * epsilon; // small random number to break ties randomly in unexpanded nodes
+			historyParameter * historyHeuristic.heuristic(i) * (1.0 / (visits[i] - score[i]  + 1.0));
 		if(uctValue > bestValue) {
 			selectedIndex = i;
 			bestValue = uctValue;
@@ -1041,6 +1093,13 @@ float TreeNode::rollOut(const Board& board) const
 	
 	// 0, ½ or 1 point
 	uint winner = copy.winner();
+	if(winner == 1) {
+		HistoryHeuristic::player1.countWin(copy.white());
+		HistoryHeuristic::player2.countLoss(copy.black());
+	} else if(winner == 2) {
+		HistoryHeuristic::player1.countLoss(copy.white());
+		HistoryHeuristic::player2.countWin(copy.black());
+	}
 	if(winner == 0)
 		return 0.5;
 	if(winner == board.player())
