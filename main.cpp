@@ -1027,39 +1027,26 @@ Move TreeNode::bestMove() const
 
 float TreeNode::rollOut(const Board& board) const
 {
-	const uint bambooRepeats = 1;
-	const uint fillOutRepeats = 1;
-	float result = 0.0;
-	
 	// Do the bamboo bridges
-	for(uint b = 0; b < bambooRepeats; b++) {
-		// Create bamboo bridges
-		Board bamboo(board);
-		bamboo.bambooBridges();
-		
-		// Early exit if already won
-		uint winner = bamboo.winner();
-		if(winner != 0) {
-			result += ((winner == board.player()) ? 1.0 : 0.0) * fillOutRepeats;
-			continue;
-		}
-		
-		// Do the fill-outs
-		for(uint i = 0; i < fillOutRepeats; i++) {
-			Board fillOut(bamboo);
-			fillOut.randomFillUp();
-			
-			// 0, ½ or 1 point
-			uint winner = fillOut.winner();
-			if(winner == 0)
-				result += 0.5;
-			if(winner == board.player())
-				result += 1.0;
-			else
-				result += 0.0;
-		}
-	}
-	return result / (fillOutRepeats * bambooRepeats);
+	Board copy(board);
+	copy.bambooBridges();
+	
+	// Early exit if already won
+	// uint winner = copy.winner();
+	// if(winner != 0)
+	// 	return ((winner == board.player()) ? 1.0 : 0.0);
+	
+	// Do the fill-outs
+	copy.randomFillUp();
+	
+	// 0, ½ or 1 point
+	uint winner = copy.winner();
+	if(winner == 0)
+		return 0.5;
+	if(winner == board.player())
+		return 1.0;
+	else
+		return 0.0;
 }
 
 void TreeNode::scaleStatistics(uint factor)
