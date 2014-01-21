@@ -736,8 +736,8 @@ class TreeNode {
 public:
 	static constexpr int nActions = 5;
 	static constexpr float epsilon = 1e-6;
-	static constexpr float explorationParameter = sqrt(2.0);
-	static constexpr float historyParameter = 1.0;
+	static constexpr float explorationParameter = 0.35; // C = 0.35 0.7 1.4
+	static constexpr float historyParameter = 2.00; // W = 0.5 1.0 2.0
 	static uint numNodes() { return _numNodes; }
 	
 	TreeNode();
