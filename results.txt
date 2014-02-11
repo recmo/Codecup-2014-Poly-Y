@@ -284,3 +284,46 @@ Ranking order             Modified    Type  Score
 11  polio2086908-C020-W1600 (1390343764)   R    157
 12  polioaf49fbf         (1390384004)   R    146
 
+Ranking order             Modified    Type  Score
+-------------------------------------------------
+ 1  polioe4c1128         (1390410288)   R    127
+ 2  polio2086908         (1390425243)   R    124
+ 3  polio-1815843        (1390383965)   R    121
+ 4  poliob8d92a9         (1390214788)   R    106
+ 5  polio5ece34c         (1390171697)   R    105
+ 6  polioaf49fbf         (1390384004)   R    103
+ 7  player2              (1390337129)   R     80
+ 8  player1              (1390337128)   R     70
+
+(Switch back to 10, cleared competition logs)
+
+Ranking order             Modified    Type  Score
+-------------------------------------------------
+ 1  polioe4c1128         (1390466077)   R    321
+ 2  polio2086908         (1390466077)   R    317
+ 3  polio-vorige         (1390466252)   R    316
+ 4  polioaf49fbf         (1390466077)   R    280
+ 5  polio5ece34c         (1390466077)   R    273
+ 6  poliob8d92a9         (1390466077)   R    270
+ 7  polio-1815843        (1390466077)   R    258
+ 8  player3              (1390466077)   R    234
+ 9  player2              (1390466077)   R    200
+10  player1              (1390466077)   R    180
+
+Removing timeouts
+	cd caia/competitionlogs;  grep -R TIMEOUT | cut -d: -f1 | uniq | xargs -d'\n' rm
+
+Ranking order             Modified    Type  Score
+-------------------------------------------------
+ 1  polioe4c1128         (1390466077)   R    319
+ 2  polio-vorige         (1390466252)   R    319
+ 3  polio2086908         (1390466077)   R    314
+ 4  polio-1815843        (1390466077)   R    293
+ 5  polioaf49fbf         (1390466077)   R    281
+ 6  polio5ece34c         (1390466077)   R    272
+ 7  poliob8d92a9         (1390466077)   R    271
+ 8  player3              (1390466077)   R    234
+ 9  player2              (1390466077)   R    200
+10  player1              (1390466077)   R    180
+
+
